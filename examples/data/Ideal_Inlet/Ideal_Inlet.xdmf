@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<!DOCTYPE Xdmf SYSTEM "Xdmf.dtd" []>
+<Xdmf Version="3.0" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <Domain>
+    <Grid Name="mesh" GridType="Uniform">
+      <Topology TopologyType="Triangle" NumberOfElements="23104" NodesPerElement="3">
+        <DataItem Dimensions="23104 3" NumberType="Int" Format="HDF">Ideal_Inlet.h5:/Mesh/mesh/topology</DataItem>
+      </Topology>
+      <Geometry GeometryType="XY">
+        <DataItem Dimensions="11768 2" Format="HDF">Ideal_Inlet.h5:/Mesh/mesh/geometry</DataItem>
+      </Geometry>
+    </Grid>
+    <Grid Name="eta" GridType="Collection" CollectionType="Temporal">
+      <Grid Name="eta" GridType="Uniform">
+        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
+        <Time Value="0" />
+        <Attribute Name="eta" AttributeType="Scalar" Center="Node">
+          <DataItem Dimensions="11768 1" Format="HDF">Ideal_Inlet.h5:/Function/eta/0</DataItem>
+        </Attribute>
+      </Grid>
+      <Grid Name="eta" GridType="Uniform">
+        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
+        <Time Value="1800" />
+        <Attribute Name="eta" AttributeType="Scalar" Center="Node">
+          <DataItem Dimensions="11768 1" Format="HDF">Ideal_Inlet.h5:/Function/eta/1800</DataItem>
+        </Attribute>
+      </Grid>
+    </Grid>
+    <Grid Name="depth averaged velocity" GridType="Collection" CollectionType="Temporal">
+      <Grid Name="depth averaged velocity" GridType="Uniform">
+        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
+        <Time Value="0" />
+        <Attribute Name="depth averaged velocity" AttributeType="Vector" Center="Node">
+          <DataItem Dimensions="11768 3" Format="HDF">Ideal_Inlet.h5:/Function/depth averaged velocity/0</DataItem>
+        </Attribute>
+      </Grid>
+      <Grid Name="depth averaged velocity" GridType="Uniform">
+        <xi:include xpointer="xpointer(/Xdmf/Domain/Grid[@GridType='Uniform'][1]/*[self::Topology or self::Geometry])" />
+        <Time Value="1800" />
+        <Attribute Name="depth averaged velocity" AttributeType="Vector" Center="Node">
+          <DataItem Dimensions="11768 3" Format="HDF">Ideal_Inlet.h5:/Function/depth averaged velocity/1800</DataItem>
+        </Attribute>
+      </Grid>
+    </Grid>
+  </Domain>
+</Xdmf>

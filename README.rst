@@ -3,19 +3,11 @@ SWEMnics
 ========
 
 
-Add a short description here!
+This package allows for solving the shallow water equations with FEniCSx with a wide variety of numerical methods.
 
 
 Description
 ===========
 
-A longer description of your project goes here...
+The primary components of the package are a set of solvers, and a problem set. Example usage for both can be found in the examples folder. Both problems and solvers can be extended to support customized applications and/or numerical methods.
 
-
-.. _pyscaffold-notes:
-
-Note
-====
-
-This project has been set up using PyScaffold 4.0.2. For details and usage
-information on PyScaffold see https://pyscaffold.org/.
