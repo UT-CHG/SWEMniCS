@@ -9,12 +9,21 @@ from mpi4py import MPI
 import numpy as np
 import ufl
 from ufl import (dot,div, as_tensor, as_vector, inner, dx, Measure, sqrt,conditional)
+try:
+  from ufl import FiniteElement, VectorElement, MixedElement
+  use_basix=False
+except ImportError:
+  use_basix=True
+  import basix
+  from basix.ufl import element, mixed_element
+
 from petsc4py.PETSc import ScalarType
 from swemnics.boundarycondition import BoundaryCondition,MarkBoundary
 from dataclasses import dataclass
 from swemnics.constants import g, R, omega, p_water, p_air
 from swemnics.forcing import GriddedForcing
 import scipy
+import h5py
 #Mark change for conda compatability
 #g = 9.81
 #R = 6.738e+6
@@ -49,13 +58,12 @@ class BaseProblem:
     # path to forcing file
     forcing: GriddedForcing = None
     lat0: float = 35
-    # units for nondimensionalization
-    # length scale in meters
-    L: float = 1
-    # time scale in seconds
-    T: float = 1
-    #a ramping duration for boundary forcing
+    # a ramping duration for boundary forcing
     dramp: float = 1e-10
+    # wetting-and-drying flag
+    wd: bool = False
+    # wetting-and-drying parameter
+    wd_alpha: float = 0.05
 
     def __post_init__(self):
         """Initialize the mesh and other variables needed for BC's
@@ -67,7 +75,13 @@ class BaseProblem:
 
     def _create_mesh(self):
         self.mesh = mesh.create_unit_square(MPI.COMM_WORLD, nx, ny, mesh.CellType.triangle)
-    
+   
+    def log(self, *msg):
+        """Log a message
+        """
+
+        if self.mesh.comm.Get_rank() == 0: print(*msg)
+
     def init_V(self, V):
         """Initialize the space V in which the problem will be solved.
         
@@ -110,6 +124,8 @@ class BaseProblem:
         if self.solution_var == 'h':
             h, ux, uy = u[0], u[1], u[2]
             eta = h - self.h_b
+            if self.wd:
+              h = h + self._wd_f(h)
             hux, huy = h*ux, h*uy
         elif self.solution_var == 'eta':
             eta, ux, uy = u[0], u[1], u[2]
@@ -127,20 +143,49 @@ class BaseProblem:
         elif form == 'flux': return h, hux, huy
         else:
             raise ValueError(f"Invalid output form '{form}'")
+    
+    def _wd_f(self, h):
+        """Compute correction to water column height for wetting-and-drying
+        """
+        #include option for w/d
+        #this comes from Karna papr, DG w/d
+        #we modify the equations by including h_tilde as the conserved variable
+
+        #this modifying function is straight from paper, though it could be interesting
+        # to modify maybe a tanh or a bubble function
+        if hasattr(self, '_wd_alpha_sq'):
+            wd_alpha_sq = self._wd_alpha_sq
+        else:
+            wd_alpha_sq = self._wd_alpha_sq = fe.Constant(self.mesh, ScalarType(self.wd_alpha**2))
+        #alpha hard coded, maybe open to front end later
+        return .5 * (sqrt(h**2 + wd_alpha_sq) - h)
+
+    def get_h_b(self, u):
+        """Get the modified bathymetry
+        """
+
+        if self.wd:
+            if self.solution_var in ['flux', 'h']: h = u[0]
+            elif self.solution_var == 'eta': h = u[0] + self.h_b
+            return self.h_b + self._wd_f(h)
+        return self.h_b
 
     def make_Fu(self, u):
         h, ux, uy = self._get_standard_vars(u, form='h')
-        #        components = [
-        #            [h*ux,h*uy], 
-        #            [h*ux*ux+ 0.5*g*h*h, h*ux*uy],
-        #            [h*ux*uy,h*uy*uy+0.5*g*h*h]
-        #        ]
-        #well balanced from Kubatko paper
-        components = [
+        h_b = self.get_h_b(u)
+        if self.wd and False:
+            components = [
+                    [h*ux,h*uy], 
+                    [h*ux*ux+ 0.5*g*h*h, h*ux*uy],
+                    [h*ux*uy,h*uy*uy+0.5*g*h*h]
+            ]
+        else:
+          #well balanced from Kubatko paper
+          components = [
             [h*ux,h*uy], 
-            [h*ux*ux+ 0.5*g*h*h-0.5*g*self.h_b*self.h_b, h*ux*uy],
-            [h*ux*uy,h*uy*uy+0.5*g*h*h-0.5*g*self.h_b*self.h_b]
-        ]    
+            [h*ux*ux+ 0.5*g*h*h-0.5*g*h_b*h_b, h*ux*uy],
+            [h*ux*uy,h*uy*uy+0.5*g*h*h-0.5*g*h_b*h_b]
+          ]    
         
         if self.spherical:
             # add spherical correction factor
@@ -155,18 +200,20 @@ class BaseProblem:
 
     def make_Fu_wall(self, u):
         h, ux, uy = self._get_standard_vars(u, form='h')
-        g = self.g
-        #        components = [
-        #            [0,0], 
-        #            [ 0.5*g*h*h, 0],
-        #            [0,0.5*g*h*h ]
-        #        ]
-        #for well balanced
-        components = [
+        h_b = self.get_h_b(u)
+        if self.wd and False:
+                components = [
+                    [0,0], 
+                    [ 0.5*g*h*h, 0],
+                    [0,0.5*g*h*h ]
+                ]
+        else:
+          #for well balanced
+          components = [
             [0,0], 
-            [0.5*g*h*h-0.5*g*self.h_b*self.h_b, 0],
-            [0,0.5*g*h*h-0.5*g*self.h_b*self.h_b]
-        ]
+            [0.5*g*h*h-0.5*g*h_b*h_b, 0],
+            [0,0.5*g*h*h-0.5*g*h_b*h_b]
+          ]
 
         if self.spherical:
             # add spherical correction factor
@@ -189,13 +236,10 @@ class BaseProblem:
     def get_friction(self, u):
         friction_law = self.friction_law
         h, ux, uy = self._get_standard_vars(u, form='h')
-        g = self.g
         if friction_law == 'linear':
-            # nondimensional drag coefficient
-            cf = self.TAU * (self.T/self.L)
             #hard code experiment
             cf = 0.025
-            print("CF = ",cf)
+            self.log("CF = ",cf)
             #linear law which is same as ADCIRC option
             return as_vector((0,
                  ux*cf,
@@ -203,14 +247,12 @@ class BaseProblem:
         elif friction_law == 'quadratic':
             #experimental but 1e-16 seems to be ok
             eps = 1e-16
-            self.TAU_const = 0.003#0.03
-            print("quadratic friction coefficient of",self.TAU_const)
             vel_mag = conditional(ux*ux + uy*uy < eps, eps, pow(ux*ux + uy*uy, 0.5))
-            
+            self.TAU_const = .003 
             return as_vector(
                 (0,
                 vel_mag*ux*self.TAU_const,
-                vel_mag*uy*self.TAU_const ) )
+                vel_mag*uy*self.TAU_const) )
 
         elif friction_law == 'mannings':
             #experimental but 1e-16 seems to be ok
@@ -229,7 +271,7 @@ class BaseProblem:
             HBREAK = 1.0
             FTHETA = 10.0
             FGAMMA = 1.0/3.0
-            print("USING NOLIBF2")
+            self.log("USING NOLIBF2")
             Cd = conditional(h>eps, FFACTOR* ( ( 1+  (HBREAK/h)**FTHETA  )**(FGAMMA/FTHETA) ), eps)
             #Cd = conditional(h<HBREAK, FFACTOR* ( ( 1+  (HBREAK/h)**FTHETA  )**(FGAMMA/FTHETA) ), FFACTOR )
             return as_vector(
@@ -242,7 +284,8 @@ class BaseProblem:
     
     def make_Source(self, u,form='well_balanced'):
         h, ux, uy = self._get_standard_vars(u, form='h')
-        g = self.g
+        h_b = self.get_h_b(u)
+        #h_b = self.h_b
         if self.spherical:
             if self.projected:
                 #canonical form is necessary for SUPG terms
@@ -250,8 +293,8 @@ class BaseProblem:
                     g_vec = as_vector(
                         (
                             0,#-h * uy * self.tan / R,
-                            -g*h*self.h_b.dx(0) * self.S ,#- 2*h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
-                            -g*h*self.h_b.dx(1),# + 2*h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
+                            -g*h*h_b.dx(0) * self.S ,#- 2*h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
+                            -g*h*h_b.dx(1),# + 2*h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
                         )
                     )
                 #well balanced is default
@@ -259,8 +302,8 @@ class BaseProblem:
                     g_vec = as_vector(
                         (
                             -h * uy * self.tan / R,
-                            -g*(h-self.h_b)*self.h_b.dx(0) * self.S - 2*h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
-                            -g*(h-self.h_b)*self.h_b.dx(1) + 2*h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
+                            -g*(h-h_b)*h_b.dx(0) * self.S - 2*h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
+                            -g*(h-h_b)*h_b.dx(1) + 2*h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
                         )
                     )
             else:
@@ -268,8 +311,8 @@ class BaseProblem:
                     g_vec = as_vector(
                         (
                             -h * uy * self.tan / R,
-                            -g*h*self.h_b.dx(0) * self.S / R - h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
-                            -g*h*self.h_b.dx(1) / R + h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
+                            -g*h*h_b.dx(0) * self.S / R - h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
+                            -g*h*h_b.dx(1) / R + h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
                         )
                     )
                 #well balanced
@@ -277,8 +320,8 @@ class BaseProblem:
                     g_vec = as_vector(
                         (
                             -h * uy * self.tan / R,
-                            -g*(h-self.h_b)*self.h_b.dx(0) * self.S / R - h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
-                            -g*(h-self.h_b)*self.h_b.dx(1) / R + h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
+                            -g*(h-h_b)*h_b.dx(0) * self.S / R - h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
+                            -g*(h-h_b)*h_b.dx(1) / R + h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
                         )
                     )
         else:
@@ -286,22 +329,21 @@ class BaseProblem:
                 g_vec = as_vector(
                     (
                         0,
-                        -g*h*self.h_b.dx(0),
-                        -g*h*self.h_b.dx(1)
+                        -g*h*h_b.dx(0),
+                        -g*h*h_b.dx(1)
                     )
                 )
 
             #well balanced is default
             else:
-                print("USING NONSPEHRICAL WELLBALANCED")
+                self.log("USING NONSPHERICAL WELLBALANCED")
                 g_vec = as_vector(
                     (
                         0,
-                        -g*(h-self.h_b)*self.h_b.dx(0),
-                        -g*(h-self.h_b)*self.h_b.dx(1)
+                        -g*(h-h_b)*h_b.dx(0),
+                        -g*(h-h_b)*h_b.dx(1)
                     )
                 )
-
 
         source = g_vec + self.get_friction(u) 
 
@@ -343,10 +385,11 @@ class BaseProblem:
         as used for manufactured solution test cases
         '''
         h, ux, uy = self._get_standard_vars(u, form='h')
+        h_b = self.get_h_b(u)
         components = [
-            [self.h_b*ux,self.h_b*uy], 
-            [g*h-g*self.h_b, 0.0],
-            [0.0,g*h-g*self.h_b]
+            [h_b*ux,h_b*uy], 
+            [g*h-g*h_b, 0.0],
+            [0.0,g*h-g*h_b]
         ]
 
         if self.spherical:
@@ -362,37 +405,25 @@ class BaseProblem:
 
     def make_Fu_top_wall_linearized(self, u):
         h, ux, uy = self._get_standard_vars(u, form='h')
-        #        components = [
-        #            [0,0], 
-        #            [ 0.5*g*h*h, 0],
-        #            [0,0.5*g*h*h ]
-        #        ]
-        #for well balanced
+        h_b = self.get_h_b(u)
         #this would be u dot n =0 
         components = [
-            [self.h_b*ux,0], 
-            [g*h-g*self.h_b, 0],
-            [0,g*h-g*self.h_b]
+            [h_b*ux,0], 
+            [g*h-g*h_b, 0],
+            [0,g*h-g*h_b]
         ]
         return as_tensor(components)
 
         
     def make_Fu_side_wall_linearized(self, u):
         h, ux, uy = self._get_standard_vars(u, form='h')
-        #        components = [
-        #            [0,0], 
-        #            [ 0.5*g*h*h, 0],
-        #            [0,0.5*g*h*h ]
-        #        ]
-        #for well balanced
+        h_b = self.get_h_b(u)
         #this would be u dot n =0 
         components = [
-            [0,self.h_b*uy], 
-            [g*h-g*self.h_b, 0],
-            [0,g*h-g*self.h_b]
+            [0,h_b*uy], 
+            [g*h-g*h_b, 0],
+            [0,g*h-g*h_b]
         ]
-        
-
         
         if self.spherical:
             # add spherical correction factor
@@ -400,17 +431,12 @@ class BaseProblem:
             for i in range(len(components)):
                 components[i][0] = components[i][0] * self.S
             if self.projected:
-                #just write our own
-                #components = [
-                #    [(self.S-1)*h*ux,0], 
-                #    [ (self.S-1)*(h*ux*ux)+self.S*0.5*g*h*h, 0],
-                #    [(self.S-1)*h*ux*uy,0.5*g*h*h ]
-                #    ]
                 return as_tensor(components)
             else:
                 return as_tensor(components) / R
         else:
             return as_tensor(components)
+
     def make_Source_linearized(self, u,form='well_balanced'):
         h, ux, uy = self._get_standard_vars(u, form='h')
         #just a linear friction term
@@ -515,7 +541,7 @@ class BaseProblem:
         """Return the nondimensional version of g
         """
 
-        return g / (self.L/self.T**2)
+        return g
 
 
 @dataclass
@@ -567,13 +593,10 @@ class TidalProblem(BaseProblem):
             self._TAU = self.TAU
             
         if self.friction_law in ['linear', 'mannings','nolibf2','quadratic']:
-            self.TAU_const = self._TAU
-
-            self.TAU = fe.Function(V.sub(0).collapse()[0])
-            self.TAU.interpolate(lambda x: self.TAU_const + x[0]*0)
+            self.TAU_const = fe.Constant(self.mesh, ScalarType(self._TAU))
 
     def make_h_init(self, V):
-        return None
+        return self.h_b 
 
     def init_V(self, V):
         """Initialize the space V in which the problem will be solved.
@@ -664,25 +687,43 @@ class TidalProblem(BaseProblem):
                         self.V.sub(0).element.interpolation_points()
                     )
                 )
-                if len(self.dof_open):
-                    self._hb_boundary = h_ex.x.array[self.dof_open]
-                else:
-                    self._hb_boundary = None
+                self._hb_boundary = h_ex.x.array[self.dof_open]
 
-            if len(self.dof_open):
-                bc = self._hb_boundary + tide
-                self.u_ex.sub(0).x.array[self.dof_open] = bc
+            bc = self._hb_boundary + tide
+            self.u_ex.sub(0).x.array[self.dof_open] = bc
 
 @dataclass
 class IdealizedInlet(TidalProblem):
 
     xdmf_file: str = None
+    bypass_xdmf: bool = False
     h_b: float = 14.0
 
     def _create_mesh(self):
-        #read in xdmf file for mesh
-        encoding= io.XDMFFile.Encoding.HDF5
-        with io.XDMFFile(MPI.COMM_WORLD, self.xdmf_file, "r", encoding=encoding) as file:
+
+        # Try directly reading the h5 file
+        # on some cases xdmf has a bug that causes it to use all the memory and crash the system. . .
+        # Note this option should be used in serial ONLY
+        if self.bypass_xdmf:
+          gdim, shape, degree = 2, "triangle", 1
+          if use_basix:
+            element = basix.ufl.element("Lagrange", shape, degree, shape=(2,))
+          else:
+            cell = ufl.Cell(shape, geometric_dimension=gdim)
+            element = ufl.VectorElement("Lagrange", cell, degree)
+          fname = self.xdmf_file.replace(".xdmf", ".h5")
+          with h5py.File(fname, "r") as ds:
+            geom = ds["Mesh/mesh/geometry"][:]
+            if geom.shape[-1] == 2:
+              new_geom = np.zeros((geom.shape[0], 3))
+              new_geom[:, :2] = geom
+              geom = new_geom
+            topology = ds["Mesh/mesh/topology"][:]
+            self.mesh = mesh.create_mesh(MPI.COMM_WORLD, topology, geom, ufl.Mesh(element))
+        else:
+          #read in xdmf file for mesh
+          encoding = io.XDMFFile.Encoding.HDF5
+          with io.XDMFFile(MPI.COMM_WORLD, self.xdmf_file, "r", encoding=encoding) as file:
             self.mesh = file.read_mesh()
 
         self.boundaries = [(1, lambda x: np.isclose(x[1], 0)),
@@ -706,7 +747,7 @@ class WellBalancedProblem(TidalProblem):
     x1: float = 1000
     y0: float = 0
     y1: float = 1000
-    mag: float = 0.0
+    mag: float = 0.15
     alpha: float = 0.00014051891708
     h_b: float = 10.0
     t: float = 0
@@ -727,6 +768,9 @@ class WellBalancedProblem(TidalProblem):
         h_b.interpolate(lambda x: 10 - 5*(np.logical_and(np.logical_and(np.logical_and(x[1]>400, x[1]<600),x[0]>400),x[0]<600))  )
         return h_b
 
+    def evaluate_tidal_boundary(self):
+        # no tides
+        return 0
 
 
 #a very simple forcing class to apply rainfall
@@ -829,8 +873,6 @@ class DamProblem(TidalProblem):
     floor: float = 2.0
     h_b: float = 2.0
     t: float = 0
-    L: float = 1
-    #T: float = 1
     
     def _create_mesh(self):
         """Initialize the mesh and other variables needed for BC's
@@ -839,7 +881,7 @@ class DamProblem(TidalProblem):
         """
         print('nx,ny cells',self.nx,self.ny)
         # for nondimensionalization
-        x0, x1, y0, y1 = self.x0/self.L, self.x1/self.L, self.y0/self.L, self.y1/self.L
+        x0, x1, y0, y1 = self.x0, self.x1, self.y0, self.y1
         self.mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[x0, y0],[x1, y1]], [self.nx, self.ny])
         #self.boundaries = [(1, lambda x: np.isclose(x[0],x1)),
         #      (2, lambda x: np.logical_not(np.isclose(x[0],0 )) & np.logical_not(np.isclose(x[0],x1 )) & (np.isclose(x[1],y1) |  np.isclose(x[1],y0))),
@@ -859,12 +901,12 @@ class DamProblem(TidalProblem):
         super().init_V(V)
         #Discontinuous bathy
         #note, only makes sense for DG
-        V_bath = fe.FunctionSpace(self.mesh, ("DG", 0))
+        V_bath = functionspace(self.mesh, ("DG", 0))
         self.h_init = self.make_h_init(V_bath)
     
     def make_h_init(self, V):
         h_init =  fe.Function(V)        
-        h_init.interpolate(lambda x: self.floor/self.L - (self.mag/self.L)*(x[0]>500/self.L))
+        h_init.interpolate(lambda x: self.floor - (self.mag)*(x[0]>500))
 
         return h_init
     
@@ -877,7 +919,7 @@ class DamProblem(TidalProblem):
                interp
            )
         else:
-            self.u_ex.sub(0).interpolate(lambda x: 2.0-0.5*(x[0]>500)  )
+            self.u_ex.sub(0).interpolate(lambda x: 2.0-self.mag*(x[0]>500)  )
             self.u_ex.sub(1).interpolate(
                     fe.Expression(
                         ufl.as_vector([
@@ -1048,3 +1090,18 @@ class ConvergenceProblem(TidalProblem):
         linf_u=self.error_infinity(u_sol.sub(1).collapse(), u_analytic.sub(1).collapse())
         print("L infinity error for u:",linf_u)
         return l2_err
+
+@dataclass
+class SlopedBeachProblem(TidalProblem):
+
+   bathymetry_gradient: float = .1
+
+   def create_bathymetry(self, V):
+       """Create bathymetry over a given FunctionSpace
+       """
+
+       h_b = fe.Function(V.sub(0).collapse()[0])
+       shoreline_x = self.x0 + (self.x1-self.x0) / 2
+       self.log(f"Location of shoreline: {shoreline_x}")
+       h_b.interpolate(lambda x: self.bathymetry_gradient * (shoreline_x - x[0]))
+       return h_b

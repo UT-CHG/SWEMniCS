@@ -16,17 +16,19 @@ if __name__ == "__main__":
     parser = ap.ArgumentParser()
     parser.add_argument("--solver", choices=['dg', 'supg'], default='supg')
     parser.add_argument("--dt", type=float, default=600)
+    parser.add_argument("--alpha", type=float, default=None)
     args = parser.parse_args()
     print('Running shinnecock')
     dt = args.dt
     t_f = 5*24*3600-3600
     nt = int(t_f/dt)
     is_spherical=True
-    bath_adjust=4.0
+    wd = args.alpha is not None
+    bath_adjust = 0 if wd else 4.0
     dramp = 2.0
     prob = ADCIRCProblem(adios_file="data/shinnecock_inlet", spherical=is_spherical,
-        solution_var='h', friction_law='quadratic',
-        forcing=GriddedForcing("data/shinnecock_forcing.hdf5"),                 
+        solution_var='h', friction_law='quadratic', wd=wd, wd_alpha=args.alpha,
+        #forcing=GriddedForcing("data/shinnecock_forcing.hdf5"),                 
         dt=dt, bathy_adjustment=bath_adjust, nt=nt,dramp=dramp)
     p_degree = 1
     rel_toleran=1e-5
@@ -69,9 +71,10 @@ if __name__ == "__main__":
     
     #time and print
     start_time = time.time()
+    plot_name = 'shinnecock' if not wd else f'shinnecock-wd-{args.alpha}'
     solver.time_loop(solver_parameters=params,
                         plot_every=1,
-                        plot_name='shinnecock',
+                        plot_name=plot_name,
                         stations = stations
                     )
     print("---------Simulation finished with run time %s seconds -------------" % (time.time() - start_time) )

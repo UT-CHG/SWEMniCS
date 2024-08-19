@@ -58,21 +58,29 @@ class BaseSolver:
         
         self.mpi_rank = MPI.COMM_WORLD.Get_rank()
         self.problem = problem
-        self.domain = problem.mesh
-        self.TAU = problem.TAU
         self.theta = theta
         self.p_degree = p_degree
         self.p_type = p_type
         self.names = ["eta","u","v"]
         #extra optional parameter added for linearized
         self.swe_type=swe_type
-        print("SWE TYPE",self.swe_type)
+        self.log("SWE TYPE",self.swe_type)
+        if self.wd:
+            self.log("Wetting drying activated \n")
+        else:
+            self.log("Wetting drying NOT activated \n")
 
         self.init_fields()
         self.init_weak_form()
 
-        
+    @property
+    def TAU(self): return self.problem.TAU
 
+    @property
+    def domain(self): return self.problem.mesh
+
+    @property
+    def wd(self): return self.problem.wd
 
     def init_fields(self):
         """Initialize the variables
@@ -295,25 +303,19 @@ class CGImplicit(BaseSolver):
     
     def init_weak_form(self):
 
-
         theta = self.theta
         self.set_initial_condition()
         #create fluxes
-        #create fluxes
+
         if self.swe_type=="full":
             self.Fu = Fu = self.problem.make_Fu(self.u)
+            self.Fu_wall = Fu_wall = self.problem.make_Fu_wall(self.u)
+            self.S = self.problem.make_Source(self.u)
         elif self.swe_type=="linear":
             self.Fu = Fu = self.problem.make_Fu_linearized(self.u)
-        else:
-            raise Exception("Sorry, swe_type must either be linear or full, not %s" %self.swe_type)
-
-        #logic for linearized version
-        if self.swe_type=='full':
-            self.Fu_wall = Fu_wall = self.problem.make_Fu_wall(self.u)
-        elif self.swe_type=='linear':
-            print("Creating Fu Wall")
             self.Fu_wall = Fu_wall = self.problem.make_Fu_top_wall_linearized(self.u)
             self.Fu_side_wall = Fu_side_wall = self.problem.make_Fu_side_wall_linearized(self.u)
+            self.S = self.problem.make_Source_linearized(self.u)
         else:
             raise Exception("Sorry, swe_type must either be linear or full, not %s" %self.swe_type)
 
@@ -326,63 +328,32 @@ class CGImplicit(BaseSolver):
         self.F = -inner(Fu,grad(self.p))*dx
         self.add_bcs_to_weak_form()
 
-        self.dt = self.problem.dt/self.problem.T
+        self.dt = self.problem.dt
 
-        #add RHS forcing
-        #logic for linearized version
-        if self.swe_type=='full':
-            self.S = self.problem.make_Source(self.u)
-        elif self.swe_type=='linear':
-            self.S = self.problem.make_Source_linearized(self.u)
-        else:
-            raise Exception("Sorry, swe_type must either be linear or full, not %s" %self.swe_type)
         #add RHS to residual
         self.F += inner(self.S,self.p)*dx
         
 
         #add contribtuion from time step
         h_b = self.problem.h_b
-        
- 
-        #Crank-Nicholson seems to have issues, so implementing BDF2 as in AdH or Behzadi 2016
-        if self.problem.solution_var == 'eta':
-            self.Q = as_vector((self.u[0]+self.problem.h_b, self.u[1]*(self.u[0]+self.problem.h_b), self.u[2]*(self.u[0]+self.problem.h_b) ))
-            self.Qn = as_vector((self.u_n[0]+self.problem.h_b, self.u_n[1]*(self.u_n[0]+self.problem.h_b), self.u_n[2]*(self.u_n[0]+self.problem.h_b) ))
-            self.Qn_old = as_vector((self.u_n_old[0]+self.problem.h_b, self.u_n_old[1]*(self.u_n_old[0]+self.problem.h_b), self.u_n_old[2]*(self.u_n_old[0]+self.problem.h_b) ))
-
-            #BDF2
-                
-
-
-        elif self.problem.solution_var =='h':
-            #Note, only adding in linearized version for if sol var is h
-            if self.swe_type=="full":
-                #if h is unkown
-                self.Q = as_vector((self.u[0], self.u[1]*self.u[0], self.u[2]*self.u[0] ))
-                self.Qn = as_vector((self.u_n[0], self.u_n[1]*self.u_n[0], self.u_n[2]*self.u_n[0]))
-                self.Qn_old = as_vector((self.u_n_old[0], self.u_n_old[1]*self.u_n_old[0], self.u_n_old[2]*self.u_n_old[0] ))          
-            elif self.swe_type =="linear":
-                #if h is unkown
-                self.Q = as_vector((self.u[0], self.u[1], self.u[2] ))
-                self.Qn = as_vector((self.u_n[0], self.u_n[1], self.u_n[2]))
-                self.Qn_old = as_vector((self.u_n_old[0], self.u_n_old[1], self.u_n_old[2] ))
-            else:
-                raise Exception("Sorry, swe_type must either be linear or full, not %s" %self.swe_type)
-
-        elif self.problem.solution_var =='flux':
-            #if Q is unkown
-            self.Q = self.u
-            self.Qn = self.u_n
-            self.Qn_old = self.u_n_old
-            #BDF2
-            prim = as_vector((self.u[0],self.u[1]/self.u[0], self.u[2]/self.u[0] ))
-            prim_n = as_vector((self.u_n[0],self.u_n[1]/self.u_n[0], self.u_n[2]/self.u_n[0] ))
-            prim_n_old = as_vector((self.u_n_old[0],self.u_n_old[1]/self.u_n_old[0], self.u_n_old[2]/self.u_n_old[0] ))
+        if self.swe_type == "full":
+            self.Q = as_vector(self.problem._get_standard_vars(self.u, "flux"))
+            self.Qn = as_vector(self.problem._get_standard_vars(self.u_n, "flux"))
+            self.Qn_old = as_vector(self.problem._get_standard_vars(self.u_n_old, "flux"))
+        elif self.swe_type == "linear":
+            #if h is unkown
+            self.Q = as_vector((self.u[0], self.u[1], self.u[2] ))
+            self.Qn = as_vector((self.u_n[0], self.u_n[1], self.u_n[2]))
+            self.Qn_old = as_vector((self.u_n_old[0], self.u_n_old[1], self.u_n_old[2] ))
+        else:
+            raise Exception("Sorry, swe_type must either be linear or full, not %s" %self.swe_type)
         
         #BDF2
         self.dQdt = theta1*fe.Constant(self.domain,PETSc.ScalarType(1/self.dt))*(1.5*self.Q - 2*self.Qn + 0.5*self.Qn_old) + (1-theta1)*fe.Constant(self.domain,PETSc.ScalarType(1/self.dt))*(self.Q - self.Qn)
-        self.dQ_ncdt = theta1*fe.Constant(self.domain,PETSc.ScalarType(1/self.dt))*(1.5*self.u - 2*self.u_n + 0.5*self.u_n_old) + (1-theta1)*fe.Constant(self.domain,PETSc.ScalarType(1/self.dt))*(self.u - self.u_n)           
-
+        u = as_vector(self.problem._get_standard_vars(self.u, "h"))
+        u_n = as_vector(self.problem._get_standard_vars(self.u_n, "h"))
+        u_n_old = as_vector(self.problem._get_standard_vars(self.u_n_old, "h"))
+        self.dQ_ncdt = theta1*fe.Constant(self.domain,PETSc.ScalarType(1/self.dt))*(1.5*u - 2*u_n + 0.5*u_n_old) + (1-theta1)*fe.Constant(self.domain,PETSc.ScalarType(1/self.dt))*(u - u_n)           
 
         self.F+=inner(self.dQdt,self.p)*dx
 
@@ -416,8 +387,8 @@ class CGImplicit(BaseSolver):
             bad_h = hvals < 0
             coords = h_fun.function_space.tabulate_dof_coordinates()[:, :2]
             coords = self.problem.reverse_projection(coords)
-            print(f"coords of negative h on {self.mpi_rank}", coords[bad_h])
-            raise
+            print(f"first coords of negative h on {self.mpi_rank}", coords[bad_h][:1])
+            if not self.mpi_rank: raise
 
  
     def update_solution(self):
@@ -441,12 +412,16 @@ class CGImplicit(BaseSolver):
         #reads in recording stations and outputs points on each processor
         if len(points):
             points = np.array(points)
-            points = points / self.problem.L
             # be robust to 2-d input
             if points.shape[1] < 3:
                 old_points = points
                 points = np.zeros((len(points), 3))
                 points[:, :old_points.shape[1]] = old_points
+        else:
+            self.cells = []
+            self.station_bathy = np.array([], dtype=float)
+            return np.array([], dtype=float)
+        
         domain = self.problem.mesh       
         bb_tree = geometry.BoundingBoxTree(domain, domain.topology.dim)
         cells = []
@@ -488,7 +463,8 @@ class CGImplicit(BaseSolver):
 
         self.vel_plot = fe.Function(self.V_vel)
         self.vel_plot.name = "depth averaged velocity"
-
+        self.bathy_plot = fe.Function(self.V_scalar)
+        self.bathy_plot.name = "bathymetry"
 
 
     def finalize_video(self):
@@ -498,22 +474,27 @@ class CGImplicit(BaseSolver):
         """Plot a frame of the state
         """
         # dimensional scales
-        L = self.problem.L
-        T = self.problem.T
         #takes a function and plots as 
         #this will output a vector xyz, want to change
-        self.eta_expr = fe.Expression(L*(self.u.sub(0).collapse() - self.problem.h_b), self.V_scalar.element.interpolation_points())
+        self.eta_expr = fe.Expression(self.u.sub(0).collapse() - self.problem.h_b, self.V_scalar.element.interpolation_points())
         self.eta_plot.interpolate(self.eta_expr)
 
 
         #rwerite for mixed elements
-        self.v_expr = fe.Expression((L/T)*self.u.sub(1).collapse(), self.V_vel.element.interpolation_points())
+        self.v_expr = fe.Expression(self.u.sub(1).collapse(), self.V_vel.element.interpolation_points())
 
         self.vel_plot.interpolate(self.v_expr)
 
         
         self.xdmf.write_function(self.eta_plot,self.problem.t)
         self.xdmf.write_function(self.vel_plot,self.problem.t)
+        if not self.problem.t:
+            # write bathymetry for first timestep only
+            self.log("Interpolating bathymetry")
+            self.bathy_plot.interpolate(fe.Expression(self.problem.h_b, self.V_scalar.element.interpolation_points()))
+            self.log("Writing bathymetry")
+            self.xdmf.write_function(self.bathy_plot, self.problem.t)
+            self.log("Wrote bathymetry")
         
 
     def plot_frame_2(self):
@@ -543,7 +524,7 @@ class CGImplicit(BaseSolver):
         self.u.x.array[:] = self.u_n.x.array[:]
 
 
-        solver = self.solve_init(solver_parameters=solver_parameters)
+        self.solver = solver = self.solve_init(solver_parameters=solver_parameters)
         #plot the initial condition
         #Mark commented, this seems to be incorrect
         #self.update_solution()
@@ -555,7 +536,9 @@ class CGImplicit(BaseSolver):
             self.log('creating video')
             self.initialize_video(plot_name)
             self.plot_frame()
-        self.station_data[0,:,:] = self.record_stations(self.u,local_points)
+        
+        if len(stations):
+          self.station_data[0,:,:] = self.record_stations(self.u,local_points)
 
         #take first 2 steps with implicit Euler since we dont have enough steps for higher order
         self.theta1.value=0
@@ -567,7 +550,8 @@ class CGImplicit(BaseSolver):
             self.solve_timestep(solver)
             
             #add data to station variable
-            self.station_data[a+1,:,:] = self.record_stations(self.u,local_points)
+            if len(stations):
+              self.station_data[a+1,:,:] = self.record_stations(self.u,local_points)
 
             if a%plot_every==0 and plot_every <= self.problem.nt:
                 self.plot_frame()
@@ -581,15 +565,17 @@ class CGImplicit(BaseSolver):
             #working version
             self.solve_timestep(solver)
 
-            
-            self.station_data[a+1,:,:] = self.record_stations(self.u,local_points)
+            if len(stations):
+                self.station_data[a+1,:,:] = self.record_stations(self.u,local_points)
             if a%plot_every==0:
                 self.plot_frame()
         
         if plot_every <= self.problem.nt:
             self.finalize_video()
 
-        inds,vals = self.gather_station(0,local_points,self.station_data)
+        if len(stations):
+          inds, vals = self.gather_station(0,local_points,self.station_data)
+        else: inds, vals = None, None
 
         self.vals = vals
         self.inds = inds
@@ -663,25 +649,25 @@ class DGImplicit(CGImplicit):
 
             #attempt at full expression from https://docu.ngsolve.org/v6.2.1810/i-tutorials/unit-3.4-simplehyp/shallow2D.html
             #still doesnt work
-            vela =  as_vector((self.u[1]('+'),self.u[2]('+')))
-            velb =  as_vector((self.u[1]('-'),self.u[2]('-')))
+            h, ux, uy = self.problem._get_standard_vars(self.u, 'h')
+            vela =  as_vector((ux('+'),uy('+')))
+            velb =  as_vector((ux('-'),uy('-')))
             
             vnorma = conditional(dot(vela,vela) > eps,sqrt(dot(vela,vela)),np.sqrt(eps))
             vnormb = conditional(dot(velb,velb) > eps,sqrt(dot(velb,velb)),np.sqrt(eps))
 
-
-            C = conditional( (vnorma + sqrt(g*self.u[0]('+')) ) > (vnormb + sqrt(g*self.u[0]('-')) ), (vnorma + sqrt(g*self.u[0]('+'))) ,  (vnormb + sqrt(g*self.u[0]('-'))) ) 
+            C = conditional( (vnorma + sqrt(g*h('+')) ) > (vnormb + sqrt(g*h('-')) ), (vnorma + sqrt(g*h('+'))) ,  (vnormb + sqrt(g*h('-'))) ) 
 
             if self.problem.spherical:
                 if self.problem.projected:
                     #qustion, even if we are discretizing by primitives should jump be based on flux variable or primitive?
                     #appears both work, using Q now
-                    print('spherical projected DG!!')
+                    self.log('spherical projected DG!!')
                     flux = dot(avg(self.Fu), n('+')) + 0.5*C*jump(self.Q)
                 else:
                     flux = dot(avg(self.Fu), n('+')) + 0.5*C*avg(self.problem.S**2/R)*jump(self.Q)
             else:
-                flux = dot(avg(self.Fu), n('+')) + 0.5*C*jump(self.u)
+                flux = dot(avg(self.Fu), n('+')) + 0.5*C*jump(self.Q)
         #Option 2
 
         if self.problem.solution_var == 'flux':
@@ -905,7 +891,7 @@ class DGCGImplicit(DGImplicit):
         #for plotting
         self.V_vel = self.V.sub(1).collapse()[0]
         self.V_scalar = self.V.sub(0).collapse()[0]
-        print('V scalar',self.V_scalar)
+        self.log('V scalar',self.V_scalar)
 
         #split these up
 
@@ -923,7 +909,7 @@ class DGCGImplicit(DGImplicit):
         self.u_n_old.name = "u_n_old"
 
 
-    def init_weak_form(self):\
+    def init_weak_form(self):
         #add entire SUPG weak form
         super().init_weak_form()
         
