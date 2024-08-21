@@ -1,3 +1,6 @@
+"""Handling of boundary conditions and facet tags.
+"""
+
 from dolfinx import fem as fe
 import dolfinx.mesh as mesh
 from ufl import (div, as_tensor, as_vector, inner, dx,ds,Measure)
@@ -22,7 +25,7 @@ class BoundaryCondition():
             self._marker = marker
 
         elif type == "Wall" or type == "OF":
-                #Since Wall coniditon is enforced weakly, only the marker contains info
+                #Since Wall condition is enforced weakly, only the marker contains info
                 self._bc = []
                 self._marker = marker
                 self._dofs = np.array([])

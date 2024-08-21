@@ -1,17 +1,12 @@
+"""Classes for meteorological forcing.
+
+Currently only OceanWeather-esque (gridded) forcing is supported, and must be provided in an HDF5 file.
+"""
+
 import h5py
 from dolfinx import fem as fe
 from swemnics.constants import R
 import numpy as np
-
-"""
-Classes for describing meteorological forcing.
-@author Benjamin Pachev <benjaminpachev@gmail.com>
-@author Mark Loveland <markloveland@utexas.edu>
-Computation Hydraulics Group
-The Oden Intitute for Computational Engineering and Sciences
-The University of Texas at Austin
-"""
-
 
 class GriddedForcing:
     """Supports meteorological forcing on a regular lat/lon grid

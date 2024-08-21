@@ -1,3 +1,10 @@
+
+"""
+Custom Newton solver for general nonlinear variational problems.
+
+This was implemented because more control was desired over the Newton iteration than provided by the built-in NonlinearProblem class.
+"""
+
 from dolfinx import fem as fe, nls, log,geometry,io,cpp
 import ufl
 from mpi4py import MPI

@@ -1,14 +1,13 @@
+
+"""Utility script to convert ADCIRC mesh information into a format usable by FEniCS."""
+
 import ufl
-#import gmsh
 import numpy as np
 from dolfinx import io,fem,mesh,cpp,plot
 from mpi4py import MPI
 import sys
 import adios4dolfinx
 from constants import R
-#Mark change for conda compatability
-#g = 9.81
-#R = 6.738e+6
 import argparse as ap
 import json
 import os

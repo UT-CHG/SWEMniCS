@@ -1,3 +1,9 @@
+"""
+A set of classes defining different test cases for the shallow water equations.
+
+Problem classes contain most of the logic for building the flux and forcing tensors. They also specify the mesh and boundary conditions for each test scenario.
+"""
+
 from dolfinx import fem as fe
 try:
   from dolfinx.fem import functionspace
@@ -24,17 +30,6 @@ from swemnics.constants import g, R, omega, p_water, p_air
 from swemnics.forcing import GriddedForcing
 import scipy
 import h5py
-#Mark change for conda compatability
-#g = 9.81
-#R = 6.738e+6
-"""
-A base class for use in defining shallow water test cases.
-@author Benjamin Pachev <benjaminpachev@gmail.com>
-@author Mark Loveland <markloveland@utexas.edu>
-Computation Hydraulics Group
-The Oden Intitute for Computational Engineering and Sciences
-The University of Texas at Austin
-"""
 
 @dataclass
 class BaseProblem:

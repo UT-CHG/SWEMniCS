@@ -1,3 +1,6 @@
+
+"""Physical constants relevant to the shallow water equations."""
+
 g = 9.81
 # radius of earth in meters
 R = 6378100

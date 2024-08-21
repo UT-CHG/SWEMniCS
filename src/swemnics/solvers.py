@@ -1,3 +1,10 @@
+
+"""Solver classes for steady-state and time-dependent problems.
+
+Each Solver requires a Problem class to initialize, and Solvers inherit from one another.
+New numerical methods can be implemented by inheriting from the classes in this file.
+"""
+
 from dolfinx import fem as fe, nls, log,geometry,io,cpp
 try:
   from dolfinx.fem import functionspace
@@ -23,9 +30,6 @@ from petsc4py import PETSc
 import numpy as np
 from swemnics.newton import CustomNewtonProblem, NewtonSolver
 from swemnics.constants import g, R
-#Mark change for conda compatability
-#g = 9.81
-#R = 6.738e+6
 try:
   import pyvista
   import dolfinx.plot
@@ -35,25 +39,24 @@ except ImportError:
 
 from petsc4py.PETSc import ScalarType
 
-"""
-A basic CG solver for the conservative shallow water equations.
-@author Benjamin Pachev <benjamin.pachev@gmail.com>
-Computation Hydraulics Group
-The Oden Intitute for Computational Engineering and Sciences
-The University of Texas at Austin
-"""
-
 
 class BaseSolver:
-    """Defines a base solver class that solves the shallow-water equations.
+    """Defines a base solver class that solves the steady-state shallow-water equations.
     """
 
     def __init__(self,problem,theta=.5,p_degree=[1,1],p_type="CG",swe_type="full"):
-        """Iniitalize the solver
+        r"""Iniitalize the solver.
         
-        Parameters
-        ----------
-        problem - instance of BaseProblem
+        Args: 
+          problem: Problem class defining the mesh and boundary conditions.
+          theta: Time stepping scheme parameter. The temporal derivative is approximated as
+        .. math:: \frac{\partial Q}{\partial t} = \Delta t \theta (\frac{3}{2}Q_n - 2Q_{n-1} + \frac{1}{2}Q_{n-2}) + \Delta t(1-\theta)(Q_n-Q_{n-1}). 
+        
+            Consequently, the scheme is Implicit Euler if theta is 0, Crank-Nicolson if theta is 1, and BDF2 if theta is .5.
+          p_degree: A tuple with two integers. The first indicates the polynomial degree for the mass variable, and the second the degree for the momentum variable.
+          p_type: Type of element to use - either 'CG' for continuous Galerkin or 'DG' for discontinuous Galerkin.
+          This is usually set by a subclass and not the user.
+          swe_type: Form of the shallow water equations to solve. Either 'full' for the full nonlinear equations (default) or 'linear' for the linearized equations. In general, 'linear' should only be used in very specific circumstances, such as verifying convergence rates to an analytic solution. 
         """
         
         self.mpi_rank = MPI.COMM_WORLD.Get_rank()
@@ -83,7 +86,7 @@ class BaseSolver:
     def wd(self): return self.problem.wd
 
     def init_fields(self):
-        """Initialize the variables
+        """Initialize the relevant elements, functions, and function spaces. 
         """
         
         # We generalize the code by now including mixed elements
@@ -113,6 +116,7 @@ class BaseSolver:
 
 
     def plot_func(self, func, name="eta"):
+        """Plot a function using pyvista."""
         if not have_pyvista:
            raise ValueError("pyvista not installed!")
         num_cells = self.domain.topology.index_map(self.domain.topology.dim).size_local
@@ -148,8 +152,9 @@ class BaseSolver:
         self.problem.init_V(new_v)
 
     def init_weak_form(self):
-        """Initialize the weak form
+        """Initialize the weak form.
         """
+
         if self.swe_type=="full":
             self.Fu = Fu = self.problem.make_Fu(self.u)
         elif self.swe_type=="linear":
@@ -162,7 +167,7 @@ class BaseSolver:
         solver_parameters={}
         ):
 
-        """Solve the equation and save the result in u_sol
+        """Solve the steady-state equation and save the result in u_sol.
         """
 
         # set initial guess
@@ -192,6 +197,8 @@ class BaseSolver:
             print(*msg)
 
 class DGSolver(BaseSolver):
+    """DG steady-state solver.
+    """
 
     def init_fields(self):
         """Initialize the variables
@@ -218,6 +225,9 @@ class DGSolver(BaseSolver):
 
 
 class CGImplicit(BaseSolver):
+    """Base class for all time stepping solvers.
+    """
+
     def init_fields(self):
         super().init_fields()
         self.u_n = fe.Function(self.V)
@@ -227,6 +237,10 @@ class CGImplicit(BaseSolver):
         self.u_n_old.name = "u_n_old"
 
     def add_bcs_to_weak_form(self):
+        """Add boundary integrals to the variational form.
+
+        This method may need to be overridden when implementing a solver with trace variables or an alternate approach to boundary conditions.
+        """
 
         boundary_conditions = self.problem.boundary_conditions
         self.log("have boundary conditions")
@@ -244,6 +258,11 @@ class CGImplicit(BaseSolver):
 
 
     def set_initial_condition(self):
+        """Set the initial condition.
+
+        The water column height is assumed to be equal to the bathymetry unless the Problem specifies a different initial condition.
+        If the Problem doesn't specifiy a velocity initial condition, it is assumed to be zero.
+        """
         if self.problem.solution_var =='h' or self.problem.solution_var =='flux':
             #rewrite for mixed element
             self.log("setting initial condition")
@@ -302,7 +321,10 @@ class CGImplicit(BaseSolver):
         self.u_n_old.sub(1).x.array[:] = self.u_n.sub(1).x.array[:]
     
     def init_weak_form(self):
+        """Initialize the weak form.
 
+        This method is typically overridden by any child class implementing a different numerical method.
+        """
         theta = self.theta
         self.set_initial_condition()
         #create fluxes
@@ -334,7 +356,7 @@ class CGImplicit(BaseSolver):
         self.F += inner(self.S,self.p)*dx
         
 
-        #add contribtuion from time step
+        #add contribution from time step
         h_b = self.problem.h_b
         if self.swe_type == "full":
             self.Q = as_vector(self.problem._get_standard_vars(self.u, "flux"))
@@ -361,22 +383,19 @@ class CGImplicit(BaseSolver):
         #u_init = lambda x: np.ones(x.shape),
         solver_parameters={}
         ):
-
-        """Solve the equation and save the result in u_sol
+        """Initialize the Newton solver
         """
 
-
         #utilize the custom Newton solver class instead of the fe.petsc Nonlinear class
-
         Newton_obj = CustomNewtonProblem(self,solver_parameters=solver_parameters)
-        
-        # built in nonlinear solver from fenicsx
-        #Newton_obj = NewtonSolver(self,solver_parameters=solver_parameters)
-
         return Newton_obj
-    #'''
+    
     def solve_timestep(self,solver):
+        """Solve the nonlinear problem at the current time step.
 
+        Args:
+          solver: Newton solver.
+        """
         try:
             solver.solve(self.u)
         except RuntimeError:

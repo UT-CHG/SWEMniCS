@@ -1,3 +1,9 @@
+"""
+Classes for testcases arising from ADCIRC input files.
+
+Specifically, these classes enable tidal potential forcing, reading boundary conditions from a file, and reading the binary files produced by ADCIRC_2_FENICS.py.
+"""
+
 from swemnics import problems as Problems
 from mpi4py import MPI
 from dataclasses import dataclass
