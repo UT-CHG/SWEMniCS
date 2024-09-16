@@ -6,7 +6,10 @@ import dolfinx.mesh as mesh
 from ufl import (div, as_tensor, as_vector, inner, dx,ds,Measure)
 import numpy as np
 
-class BoundaryCondition():
+class BoundaryCondition:
+    """A class describing a boundary condition.
+    """
+
     def __init__(self, type, marker, forcing_func=None, V=None, bound_func=None, facet_tag=None):
         self._type = type
         self._func = forcing_func
