@@ -257,6 +257,7 @@ class ADCIRCProblem(Problems.TidalProblem):
         return self.depth + fe.Constant(self.mesh, ScalarType(self.bathy_adjustment))
 
     def make_h_init(self, V):
+        #return self.problem.get_h_b(self.u_n) + self.sea_surface_height
         return self.h_b + self.sea_surface_height
    
     def create_tau(self, V):
@@ -302,21 +303,12 @@ class ADCIRCProblem(Problems.TidalProblem):
         """Create the forcing terms"""
         source = super().make_Source(u, form=form)
         if self.spherical:
-            if self.wd:
-                h,_,_=self._get_standard_vars(u, form='h')
-                tidal_body_force = ufl.as_vector((
-                    0,
-                    g*self.S * self.tidal_potential.potential.dx(0)/h,
-                    g*self.tidal_potential.potential.dx(1)/h
-                ))
-            else:
-                tidal_body_force = ufl.as_vector((
-                    0,
-                    g*self.S * self.tidal_potential.potential.dx(0),
-                    g*self.tidal_potential.potential.dx(1)
-                ))
+            tidal_body_force = ufl.as_vector((
+                0,
+                g*self.S * self.tidal_potential.potential.dx(0),
+                g*self.tidal_potential.potential.dx(1)
+            ))
             return source + tidal_body_force
-
         else:
             return source
 
@@ -325,4 +317,5 @@ class ADCIRCProblem(Problems.TidalProblem):
         self.update_boundary()
         if self.forcing is not None:
             self.forcing.evaluate(self.t)
-        self.tidal_potential.evaluate(self.t)
+        if self.spherical:
+            self.tidal_potential.evaluate(self.t)

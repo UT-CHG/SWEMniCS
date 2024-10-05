@@ -250,7 +250,6 @@ class CGImplicit(BaseSolver):
         for condition in boundary_conditions:
             if condition.type == "Open":
                 self.F += dot(dot(self.Fu_open, n), self.p) * ds_exterior(condition.marker)
-
             if condition.type == "Wall":
                 self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker)
             if condition.type == "OF":
@@ -361,14 +360,9 @@ class CGImplicit(BaseSolver):
         #add contribution from time step
         h_b = self.problem.h_b
         if self.swe_type == "full":
-            if self.wd:
-                self.Q = as_vector(self.problem._get_standard_vars(self.u, "h"))
-                self.Qn = as_vector(self.problem._get_standard_vars(self.u_n, "h"))
-                self.Qn_old = as_vector(self.problem._get_standard_vars(self.u_n_old, "h"))
-            else:
-                self.Q = as_vector(self.problem._get_standard_vars(self.u, "flux"))
-                self.Qn = as_vector(self.problem._get_standard_vars(self.u_n, "flux"))
-                self.Qn_old = as_vector(self.problem._get_standard_vars(self.u_n_old, "flux"))
+            self.Q = as_vector(self.problem._get_standard_vars(self.u, "flux"))
+            self.Qn = as_vector(self.problem._get_standard_vars(self.u_n, "flux"))
+            self.Qn_old = as_vector(self.problem._get_standard_vars(self.u_n_old, "flux"))
         elif self.swe_type == "linear":
             #if h is unkown
             self.Q = as_vector((self.u[0], self.u[1], self.u[2] ))

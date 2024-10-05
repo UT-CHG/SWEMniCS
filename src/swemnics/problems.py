@@ -177,20 +177,20 @@ class BaseProblem:
         #but doesnt seem to work very well anyway
         if self.wd:
             eta, _, _ = self._get_standard_vars(u,form='eta')
-            #this is not valid for DG with jumps in bath.
-            components = [
-                    [h*ux,h*uy], 
-                    [ux*ux+ g*eta, ux*uy],
-                    [ux*uy,uy*uy+g*eta]
-            ]
+            #fully comnservative
+            print("Fully conservative flux")
+            components= [
+                [h*ux,h*uy], 
+                [h*ux*ux + 0.5*g*(eta*eta + 2*eta*h_b), h*ux*uy],
+                [h*ux*uy,h*uy*uy+0.5*g*(eta*eta + 2*eta*h_b)]
+                ]
         else:
-          #well balanced from Kubatko paper
-          components = [
-            [h*ux,h*uy], 
-            [h*ux*ux+ 0.5*g*h*h-0.5*g*h_b*h_b, h*ux*uy],
-            [h*ux*uy,h*uy*uy+0.5*g*h*h-0.5*g*h_b*h_b]
-          ]    
-        
+            #well balanced from Kubatko paper
+            components = [
+                [h*ux,h*uy], 
+                [h*ux*ux+ 0.5*g*h*h-0.5*g*h_b*h_b, h*ux*uy],
+                [h*ux*uy,h*uy*uy+0.5*g*h*h-0.5*g*h_b*h_b]
+            ]
         if self.spherical:
             # add spherical correction factor
             for i in range(len(components)):
@@ -209,9 +209,9 @@ class BaseProblem:
             eta, _,_ = self._get_standard_vars(u,form='eta')
             components = [
                 [0,0], 
-                [ g*eta, 0],
-                [0,g*eta]
-            ]
+                [0.5*g*(eta*eta + 2*eta*h_b), 0],
+                [0,0.5*g*(eta*eta + 2*eta*h_b)]
+                ]
         else:
             #for well balanced
             components = [
@@ -295,67 +295,33 @@ class BaseProblem:
         #Mark adding nc source for wd
         #h_b = self.h_b
         if self.wd:
+            eta, _, _ = self._get_standard_vars(u, form='eta')
             if self.spherical:
                 if self.projected:
                     #pretty sure never used, can remove later
-                    if form != 'well_balanced':
-                        g_vec = as_vector(
-                            (
-                                0,
-                                -ux*ux.dx(0)*self.S - ux*uy.dx(1)
-                                -uy*uy.dx(1) - uy*ux.dx(0)*self.S))
-                    #well balanced is default
-                    #check math
-                    else:
-                        g_vec = as_vector(
-                            (
-                            0,#-h * uy * self.tan / R,
-                            -ux*ux.dx(0)*self.S - ux*uy.dx(1), #- 2 * ux * uy * self.tan / R - 2*uy*omega*self.sin,
-                            -uy*uy.dx(1) - uy*ux.dx(0)*self.S# + 2 * ux * ux * self.tan / R + 2*ux*omega*self.sin
-                            )
-                        )
+                    #no well non-well balanced option
+                    g_vec = as_vector((0,#-h * uy * self.tan / R,
+                            -g*(eta)*h_b.dx(0)*self.S, #- h * ux * uy * self.tan / R,
+                            -g*(eta)*h_b.dx(1))) # + h * ux * ux * self.tan / R))
                 else:
-                    #need to check math
-                    if form != 'well_balanced':
-                        g_vec = as_vector(
-                            (
+                    #again no non-well balanced form available
+                    g_vec = as_vector(
+                        (
                             -h * uy * self.tan / R,
-                            -ux*ux.dx(0)*self.S/R - ux*uy.dx(1) - ux * uy * self.tan / R - 2*uy*omega*self.sin,
-                            -uy*uy.dx(1) - uy*ux.dx(0)*self.S/R + ux * ux * self.tan / R + 2*ux*omega*self.sin
-                            )
-                        )
-                    #well balanced
-                    else:
-                        g_vec = as_vector(
-                            (
-                            -h * uy * self.tan / R,
-                            -ux*ux.dx(0)*self.S/R - ux*uy.dx(1) - ux * uy * self.tan / R - 2*uy*omega*self.sin,
-                            -uy*uy.dx(1) - uy*ux.dx(0)*self.S/R + ux * ux * self.tan / R + 2*ux*omega*self.sin
+                            -g*eta*h_b.dx(0) * self.S / R - h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
+                            -g*eta*h_b.dx(1) / R + h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
                             )
                         )
             else:
-                if form != 'well_balanced':
-                    #trick for SUPG only
-                    print("SUPG nonspherical\n")
-                    g_vec = as_vector(
-                        (
-                            0,
-                            -g*h_b.dx(0),
-                            -g*h_b.dx(1)
-                        )
-                    )
-
-                #well balanced is default
-                else:
-                    self.log("USING NONSPHERICAL WELLBALANCED")
-                    g_vec = as_vector(
-                        (
+                #no non-well balanced version
+                print("WD nonspherical\n")
+                g_vec = as_vector(
+                    (
                         0,
-                        -ux*ux.dx(0) - ux*uy.dx(1),
-                        -uy*uy.dx(1) - uy*ux.dx(0)
-                        )
+                        -g*eta*h_b.dx(0),
+                        -g*eta*h_b.dx(1)
                     )
-
+                )
         #no wd
         else:
             if self.spherical:
@@ -419,28 +385,16 @@ class BaseProblem:
 
 
 
-        if self.wd:
-            temp = self.get_friction(u)
-            fric = as_vector((temp[0],temp[1]/h,temp[2]/h))
-            source = g_vec +  fric
-        else:    
-            source = g_vec + self.get_friction(u) 
+        source = g_vec + self.get_friction(u) 
 
         if self.forcing is not None:
             windx, windy, pressure = self.forcing.windx, self.forcing.windy, self.forcing.pressure
             wind_mag = pow(windx*windx + windy*windy, 0.5)
             drag_coeff = (0.75 + 0.067 * wind_mag) * 1e-3 
-            if self.wd:
-                wind_forcing_terms = [
-                    0,
-                    -drag_coeff * (p_air / p_water) * windx * wind_mag / h,
-                    -drag_coeff * (p_air / p_water) * windy * wind_mag / h,
-                ]
-            else:
-                wind_forcing_terms = [
-                    0,
-                    -drag_coeff * (p_air / p_water) * windx * wind_mag,
-                    -drag_coeff * (p_air / p_water) * windy * wind_mag,
+            wind_forcing_terms = [
+                0,
+                -drag_coeff * (p_air / p_water) * windx * wind_mag,
+                -drag_coeff * (p_air / p_water) * windy * wind_mag,
                 ]
             #wind_forcing_terms = [0, 30*.001 * windx*wind_mag * (p_air/p_water), 30*.001 * windy *wind_mag * (p_air/p_water)] 
 
@@ -448,18 +402,11 @@ class BaseProblem:
             #wind_form = dot(wind_vec, wind_vec) * dx
             #print("Initial wind forcing", fe.assemble_scalar(fe.form(wind_form))**.5)
             #raise ValueError()
-            if self.wd:
-                pressure_forcing_terms = [
-                    0,
-                    pressure.dx(0) / (p_water),
-                    pressure.dx(1) / (p_water)
-                ]
-            else:
-                pressure_forcing_terms = [
-                    0,
-                    h * pressure.dx(0) / (p_water),
-                    h * pressure.dx(1) / (p_water)
-                ]
+            pressure_forcing_terms = [
+                0,
+                h * pressure.dx(0) / (p_water),
+                h * pressure.dx(1) / (p_water)
+            ]
             if self.spherical:
                 pressure_forcing_terms[1] *= self.S
                 if not self.projected:
