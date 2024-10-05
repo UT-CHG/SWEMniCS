@@ -249,7 +249,7 @@ class CGImplicit(BaseSolver):
         #loop throught boundary conditions to see if there is any wall conditions
         for condition in boundary_conditions:
             if condition.type == "Open":
-                self.F += dot(dot(self.Fu, n), self.p) * ds_exterior(condition.marker)
+                self.F += dot(dot(self.Fu_open, n), self.p) * ds_exterior(condition.marker)
 
             if condition.type == "Wall":
                 self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker)
@@ -332,6 +332,8 @@ class CGImplicit(BaseSolver):
         if self.swe_type=="full":
             self.Fu = Fu = self.problem.make_Fu(self.u)
             self.Fu_wall = Fu_wall = self.problem.make_Fu_wall(self.u)
+            self.u_ex = as_vector((self.problem.u_ex[0],self.u[1],self.u[2]))
+            self.Fu_open= Fu_open = self.problem.make_Fu(self.u_ex)
             self.S = self.problem.make_Source(self.u)
         elif self.swe_type=="linear":
             self.Fu = Fu = self.problem.make_Fu_linearized(self.u)
@@ -359,9 +361,14 @@ class CGImplicit(BaseSolver):
         #add contribution from time step
         h_b = self.problem.h_b
         if self.swe_type == "full":
-            self.Q = as_vector(self.problem._get_standard_vars(self.u, "flux"))
-            self.Qn = as_vector(self.problem._get_standard_vars(self.u_n, "flux"))
-            self.Qn_old = as_vector(self.problem._get_standard_vars(self.u_n_old, "flux"))
+            if self.wd:
+                self.Q = as_vector(self.problem._get_standard_vars(self.u, "h"))
+                self.Qn = as_vector(self.problem._get_standard_vars(self.u_n, "h"))
+                self.Qn_old = as_vector(self.problem._get_standard_vars(self.u_n_old, "h"))
+            else:
+                self.Q = as_vector(self.problem._get_standard_vars(self.u, "flux"))
+                self.Qn = as_vector(self.problem._get_standard_vars(self.u_n, "flux"))
+                self.Qn_old = as_vector(self.problem._get_standard_vars(self.u_n_old, "flux"))
         elif self.swe_type == "linear":
             #if h is unkown
             self.Q = as_vector((self.u[0], self.u[1], self.u[2] ))
@@ -675,6 +682,7 @@ class DGImplicit(CGImplicit):
             vnorma = conditional(dot(vela,vela) > eps,sqrt(dot(vela,vela)),np.sqrt(eps))
             vnormb = conditional(dot(velb,velb) > eps,sqrt(dot(velb,velb)),np.sqrt(eps))
 
+            #TODO replace conditionals with smoother transition
             C = conditional( (vnorma + sqrt(g*h('+')) ) > (vnormb + sqrt(g*h('-')) ), (vnorma + sqrt(g*h('+'))) ,  (vnormb + sqrt(g*h('-'))) ) 
 
             if self.problem.spherical:
@@ -753,6 +761,8 @@ class SUPGImplicit(CGImplicit):
         spherical = self.problem.spherical
         #set the upwid tensor
         if self.problem.solution_var =='eta':
+            #WARNING Deprecated!!!!
+
             # tau from AdH
             #using previous time step
             if spherical:
@@ -775,7 +785,8 @@ class SUPGImplicit(CGImplicit):
             S_nc = as_vector((S_temp[0],S_temp[1]/(self.u[0]+self.problem.h_b), S_temp[2]/(self.u[0]+self.problem.h_b)))
 
         elif self.problem.solution_var == 'h':
-            
+            h, ux, uy = self.problem._get_standard_vars(self.u, 'h')
+            h_n, ux_n, uy_n = self.problem._get_standard_vars(self.u_n, 'h')
             #factor from adH
             #previous time step linearizes but seems to be worse at larger time steps
             
@@ -789,20 +800,28 @@ class SUPGImplicit(CGImplicit):
             
             if self.swe_type=='full':
 
-                factor = sqrt(self.u_n[1]*self.u_n[1] + self.u_n[2]*self.u_n[2] + g*(self.u_n[0]))
-                T1 = as_matrix((  (self.u[1], self.u[0], 0), ( g, self.u[1], 0 ), (0, 0, self.u[1])   ))
-                T2 = as_matrix((  (self.u[2],0,self.u[0]), (0, self.u[2], 0 ), ( g,0,self.u[2] )   ))
+
+                factor = sqrt(ux_n*ux_n + uy_n*uy_n + g*(h_n))
+                T1 = as_matrix((  (ux, h, 0), ( g, ux, 0 ), (0, 0, ux)   ))
+                T2 = as_matrix((  (uy,0,h), (0, uy, 0 ), ( g,0,uy )   ))
             
                 #need a special source for SUPG term compatible with non-conservative SWE
 
-                S_temp = self.problem.make_Source(self.u,form='canonical')
-                S_nc = as_vector((S_temp[0],S_temp[1]/self.u[0], S_temp[2]/self.u[0]))
+                
+                if self.wd:
+                    #need custom vector for nc
+                    S_nc = self.problem.make_Source(self.u,form='canonical')
+                else:
+                    S_temp = self.problem.make_Source(self.u,form='canonical')
+                    S_nc = as_vector((S_temp[0],S_temp[1]/h, S_temp[2]/h))
+                    
             
             elif self.swe_type=='linear':
                 alpha = 0.1#0.5/(2**self.p_degree[0])
-                factor = sqrt(self.u_n[1]*self.u_n[1] + self.u_n[2]*self.u_n[2] + g*(self.problem.h_b))
-                T1 = as_matrix((  (0, self.problem.h_b, 0), ( g, 0, 0 ), (0, 0, 0)   ))
-                T2 = as_matrix((  (0,0,self.problem.h_b), (0, 0, 0 ), ( g,0, 0 )   ))
+                h_b = self.problem.get_h_b(self.u)
+                factor = sqrt(ux_n*ux_n + uy_n*uy_n + g*(h_b))
+                T1 = as_matrix((  (0, h_b, 0), ( g, 0, 0 ), (0, 0, 0)   ))
+                T2 = as_matrix((  (0,0,h_b), (0, 0, 0 ), ( g,0, 0 )   ))
                 #need a special source for SUPG term compatible with non-conservative SWE
                 S_temp = self.problem.make_Source_linearized(self.u,form='canonical')
                 S_nc = as_vector((S_temp[0],S_temp[1], S_temp[2]))
@@ -825,6 +844,7 @@ class SUPGImplicit(CGImplicit):
                     T2 = T2 / R
 
             #Experimental shock capturing term
+            #not used currently
             
             tau_shock = alpha*height1/factor
             dQdxdPdx = elem_mult(self.Q.dx(0),self.p.dx(0))
@@ -840,6 +860,7 @@ class SUPGImplicit(CGImplicit):
             
             ############################################################################        
         elif self.problem.solution_var == 'flux':
+            #WARNING: not used
             #factor from adH
             factor = sqrt(self.u_n[1]*self.u_n[1] + self.u_n[2]*self.u_n[2] + g*(self.u_n[0]))
 
@@ -867,6 +888,7 @@ class SUPGImplicit(CGImplicit):
         #Conservative residual with SUPG (doesnt seem to work as well when primitives are unkown)
         #########################################################################################    
         if self.problem.solution_var == 'flux':
+            #Warning: not used
             self.F += inner(dQdt +div(self.Fu)+self.S, (T1*temp_x+T2*temp_y)  )*dx
             #attempt adding interior penalty
             #still may need work, but appears to help stability in channel case

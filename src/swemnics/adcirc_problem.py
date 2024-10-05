@@ -279,7 +279,7 @@ class ADCIRCProblem(Problems.TidalProblem):
         self.dof_open = self._boundary_conditions[0].dofs
         self.ux_dofs_closed = np.array([])
         self.uy_dofs_closed = np.array([])
-        self._dirichlet_bcs = [bc._bc for bc in self.boundary_conditions if bc.type == "Open"]
+        self._dirichlet_bcs = []#[bc._bc for bc in self.boundary_conditions if bc.type == "Open"]
 
     def evaluate_tidal_boundary(self, t):
         return self.boundaries.evaluate_tidal_boundary(t) + self.sea_surface_height
@@ -302,12 +302,21 @@ class ADCIRCProblem(Problems.TidalProblem):
         """Create the forcing terms"""
         source = super().make_Source(u, form=form)
         if self.spherical:
-            tidal_body_force = ufl.as_vector((
-                0,
-                g*self.S * self.tidal_potential.potential.dx(0),
-                g*self.tidal_potential.potential.dx(1)
-            ))
+            if self.wd:
+                h,_,_=self._get_standard_vars(u, form='h')
+                tidal_body_force = ufl.as_vector((
+                    0,
+                    g*self.S * self.tidal_potential.potential.dx(0)/h,
+                    g*self.tidal_potential.potential.dx(1)/h
+                ))
+            else:
+                tidal_body_force = ufl.as_vector((
+                    0,
+                    g*self.S * self.tidal_potential.potential.dx(0),
+                    g*self.tidal_potential.potential.dx(1)
+                ))
             return source + tidal_body_force
+
         else:
             return source
 
