@@ -227,6 +227,7 @@ class ADCIRCProblem(Problems.TidalProblem):
 
     def _create_mesh(self):
         engine = "BP4"
+        print(self.adios_file+"_mesh.bp")
         self.mesh = adios4dolfinx.read_mesh(MPI.COMM_WORLD, self.adios_file+"_mesh.bp", engine, mesh.GhostMode.shared_facet)
         V = fe.FunctionSpace(self.mesh, ("P", 1))
         self.depth = fe.Function(V)

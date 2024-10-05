@@ -37,7 +37,7 @@ def run_experiment(name, outdir=None, **kwargs):
         dt=dt,nt=nt,nx=nx,ny=ny,
         friction_law=fric_law,
         solution_var=sol_var,spherical=False,
-        L = L, T=T
+        #L = L, T=T
     )
     p_degree = [1,1]
     rel_toleran=1e-5

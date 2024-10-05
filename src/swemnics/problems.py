@@ -9,7 +9,6 @@ try:
   from dolfinx.fem import functionspace
 except ImportError:
   from dolfinx.fem import FunctionSpace as functionspace
-
 from dolfinx import mesh,io
 from mpi4py import MPI
 import numpy as np

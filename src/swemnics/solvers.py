@@ -4,7 +4,7 @@
 Each Solver requires a Problem class to initialize, and Solvers inherit from one another.
 New numerical methods can be implemented by inheriting from the classes in this file.
 """
-
+from pathlib import Path
 from dolfinx import fem as fe, nls, log,geometry,io,cpp
 try:
   from dolfinx.fem import functionspace
@@ -427,7 +427,7 @@ class CGImplicit(BaseSolver):
             self.u.x.array[self.problem.uy_dofs_closed] = self.problem.u_ex.x.array[self.problem.uy_dofs_closed]
         if self.problem.ux_dofs_closed.size != 0:
             self.u.x.array[self.problem.ux_dofs_closed] = self.problem.u_ex.x.array[self.problem.ux_dofs_closed]
-
+    '''
     def init_stations(self,points):
         #reads in recording stations and outputs points on each processor
         if len(points):
@@ -463,6 +463,42 @@ class CGImplicit(BaseSolver):
         #print("station bathy", self.station_bathy, points_on_proc)
         points_on_proc = np.array(points_on_proc, dtype=np.float64)
         return points_on_proc
+    '''
+
+
+    def init_stations(self,points):
+        domain = self.problem.mesh
+        #reads in recording stations and outputs points on each processor
+        try:
+            #060 old version
+            bb_tree = geometry.BoundingBoxTree(domain, domain.topology.dim)
+        except:
+            #080 later versions
+            bb_tree = geometry.bb_tree(domain, domain.topology.dim)
+        cells = []
+        points_on_proc = []
+        # Find cells whose bounding-box collide with the the points
+        try:
+            #060
+            cell_candidates = geometry.compute_collisions(bb_tree, points)
+        except:
+            #080
+            cell_candidates = geometry.compute_collisions_points(bb_tree, points)
+        # Choose one of the cells that contains the point
+        colliding_cells = geometry.compute_colliding_cells(domain, cell_candidates, points)
+        self.station_index = []
+        for i, point in enumerate(points):
+            if len(colliding_cells.links(i))>0:
+                points_on_proc.append(point)
+                cells.append(colliding_cells.links(i)[0])
+                self.station_index.append(i)
+        self.cells =cells
+        bathy_func = fe.Function(self.V_scalar)
+        bathy_func.interpolate(fe.Expression(self.problem.h_b, self.V_scalar.element.interpolation_points()))
+        self.station_bathy = bathy_func.eval(points_on_proc, self.cells)
+        #print("station bathy", self.station_bathy, points_on_proc)
+        points_on_proc = np.array(points_on_proc, dtype=np.float64)
+        return points_on_proc
 
     def record_stations(self,u_sol,points_on_proc):
         """saves time series at stations into a numpy array"""
@@ -473,22 +509,34 @@ class CGImplicit(BaseSolver):
         return u_values
 
     def initialize_video(self,filename):
-        self.xdmf = io.XDMFFile(self.problem.mesh.comm, filename+"/"+filename+".xdmf", "w")
-        self.xdmf.write_mesh(self.problem.mesh)
-        
-
+        #deprecated
+        #self.xdmf = io.XDMFFile(self.problem.mesh.comm, filename+"/"+filename+".xdmf", "w")
+        #self.xdmf.write_mesh(self.problem.mesh)
         self.eta_plot = fe.Function(self.V_scalar)
         self.eta_plot.name = "eta"
-
-
+        self.h_plot = fe.Function(self.V_scalar)
+        self.h_plot.name = "depth"
         self.vel_plot = fe.Function(self.V_vel)
         self.vel_plot.name = "depth averaged velocity"
         self.bathy_plot = fe.Function(self.V_scalar)
         self.bathy_plot.name = "bathymetry"
 
+        results_folder = Path(filename)
+        results_folder.mkdir(exist_ok=True, parents=True)
+        self.wse_writer = io.VTXWriter(self.problem.mesh.comm, results_folder / "WSE.bp", self.eta_plot, engine="BP4")
+        self.h_writer = io.VTXWriter(self.problem.mesh.comm, results_folder / "h.bp", self.h_plot, engine="BP4")
+        self.vel_writer = io.VTXWriter(self.problem.mesh.comm, results_folder / "vel.bp", self.vel_plot, engine="BP4")
+        self.bathy_writer = io.VTXWriter(self.problem.mesh.comm, results_folder / "bathy.bp", self.bathy_plot, engine="BP4")
+
 
     def finalize_video(self):
-        self.xdmf.close()
+        #deprecated
+        #self.xdmf.close()
+        self.wse_writer.close()
+        self.h_writer.close()
+        self.vel_writer.close()
+        self.bathy_writer.close()
+
 
     def plot_frame(self):
         """Plot a frame of the state
@@ -502,25 +550,34 @@ class CGImplicit(BaseSolver):
 
         #rwerite for mixed elements
         self.v_expr = fe.Expression(self.u.sub(1).collapse(), self.V_vel.element.interpolation_points())
-
         self.vel_plot.interpolate(self.v_expr)
+        self.h_plot.interpolate(self.u.sub(0).collapse()) 
 
-        
-        self.xdmf.write_function(self.eta_plot,self.problem.t)
-        self.xdmf.write_function(self.vel_plot,self.problem.t)
+        #deprecated
+        #self.xdmf.write_function(self.eta_plot,self.problem.t)
+        #self.xdmf.write_function(self.vel_plot,self.problem.t)
+        self.wse_writer.write(self.problem.t)
+        self.h_writer.write(self.problem.t)
+        self.vel_writer.write(self.problem.t)
+
         if not self.problem.t:
             # write bathymetry for first timestep only
             self.log("Interpolating bathymetry")
             self.bathy_plot.interpolate(fe.Expression(self.problem.h_b, self.V_scalar.element.interpolation_points()))
             self.log("Writing bathymetry")
-            self.xdmf.write_function(self.bathy_plot, self.problem.t)
+            #self.xdmf.write_function(self.bathy_plot, self.problem.t)
+            self.bathy_writer.write(self.problem.t)
             self.log("Wrote bathymetry")
         
 
     def plot_frame_2(self):
 
         #takes a function and plots as 
-        self.xdmf.write_function(self.u,0)
+        #deptecated
+        #self.xdmf.write_function(self.u,0)
+        self.wse_writer.write(0)
+        self.h_writer.write(0)
+        self.vel_writer.write(0)
 
 
     def gather_station(self,root,local_stats,local_vals):
@@ -735,12 +792,18 @@ class SUPGImplicit(CGImplicit):
 
         #get element height as elementwise constant function
         tdim = self.domain.topology.dim
+        
+
+
+        self.domain.topology.create_connectivity(tdim, tdim)
         num_cells1 = self.domain.topology.index_map(tdim).size_local
+        cells = np.arange(num_cells1, dtype=np.int32)
+        #h = _cpp.mesh.h(mesh._cpp_object, tdim, cells)
 
         try:
             h = cpp.mesh.h(self.domain, tdim, range(num_cells1))
         except TypeError:
-            h = cpp.mesh.h(self.domain._cpp_object, tdim, range(num_cells1))
+            h = cpp.mesh.h(self.domain._cpp_object, tdim, cells)
             
         #save as a DG function
         self.cellwise = functionspace(self.domain, ("DG", 0))
