@@ -228,10 +228,12 @@ class ADCIRCProblem(Problems.TidalProblem):
     def _create_mesh(self):
         engine = "BP4"
         print(self.adios_file+"_mesh.bp")
-        self.mesh = adios4dolfinx.read_mesh(MPI.COMM_WORLD, self.adios_file+"_mesh.bp", engine, mesh.GhostMode.shared_facet)
-        V = fe.FunctionSpace(self.mesh, ("P", 1))
+        self.mesh = adios4dolfinx.read_mesh(self.adios_file+"_mesh.bp",comm= MPI.COMM_WORLD, engine=engine, ghost_mode=mesh.GhostMode.shared_facet,legacy=True)
+        #self.mesh = adios4dolfinx.read_mesh(MPI.COMM_WORLD, self.adios_file+"_mesh.bp", engine, mesh.GhostMode.shared_facet,legacy=True)
+        V = fe.functionspace(self.mesh, ("P", 1))
         self.depth = fe.Function(V)
-        adios4dolfinx.read_function(self.depth, self.adios_file+"_depth.bp", engine)
+        #adios4dolfinx.read_function(self.depth, self.adios_file+"_depth.bp", engine)
+        adios4dolfinx.read_function(self.adios_file+"_depth.bp", self.depth, engine=engine,legacy=True)
         with open(self.adios_file+"_boundary.json", "r") as fp:
             info = json.load(fp)
             self.lat0 = info.get('lat0', 0)
