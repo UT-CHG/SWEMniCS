@@ -9,7 +9,6 @@ try:
   from dolfinx.fem import functionspace
 except ImportError:
   from dolfinx.fem import FunctionSpace as functionspace
-
 from dolfinx import mesh,io
 from mpi4py import MPI
 import numpy as np
@@ -30,6 +29,7 @@ from swemnics.constants import g, R, omega, p_water, p_air
 from swemnics.forcing import GriddedForcing
 import scipy
 import h5py
+
 
 @dataclass
 class BaseProblem:
@@ -120,7 +120,10 @@ class BaseProblem:
             h, ux, uy = u[0], u[1], u[2]
             eta = h - self.h_b
             if self.wd:
-              h = h + self._wd_f(h)
+                if form =='h' or form =='flux':
+                    h = h + self._wd_f(h)
+            else:
+                print("WD NONACTIVE")
             hux, huy = h*ux, h*uy
         elif self.solution_var == 'eta':
             eta, ux, uy = u[0], u[1], u[2]
@@ -168,20 +171,25 @@ class BaseProblem:
     def make_Fu(self, u):
         h, ux, uy = self._get_standard_vars(u, form='h')
         h_b = self.get_h_b(u)
-        if self.wd and False:
-            components = [
-                    [h*ux,h*uy], 
-                    [h*ux*ux+ 0.5*g*h*h, h*ux*uy],
-                    [h*ux*uy,h*uy*uy+0.5*g*h*h]
-            ]
+        #Mark: set nc momentum by default if wd active
+        #maybe in future allow for choice of conservative
+        #but doesnt seem to work very well anyway
+        if self.wd:
+            eta, _, _ = self._get_standard_vars(u,form='eta')
+            #fully comnservative
+            print("Fully conservative flux")
+            components= [
+                [h*ux,h*uy], 
+                [h*ux*ux + 0.5*g*(eta*eta + 2*eta*h_b), h*ux*uy],
+                [h*ux*uy,h*uy*uy+0.5*g*(eta*eta + 2*eta*h_b)]
+                ]
         else:
-          #well balanced from Kubatko paper
-          components = [
-            [h*ux,h*uy], 
-            [h*ux*ux+ 0.5*g*h*h-0.5*g*h_b*h_b, h*ux*uy],
-            [h*ux*uy,h*uy*uy+0.5*g*h*h-0.5*g*h_b*h_b]
-          ]    
-        
+            #well balanced from Kubatko paper
+            components = [
+                [h*ux,h*uy], 
+                [h*ux*ux+ 0.5*g*h*h-0.5*g*h_b*h_b, h*ux*uy],
+                [h*ux*uy,h*uy*uy+0.5*g*h*h-0.5*g*h_b*h_b]
+            ]
         if self.spherical:
             # add spherical correction factor
             for i in range(len(components)):
@@ -196,19 +204,20 @@ class BaseProblem:
     def make_Fu_wall(self, u):
         h, ux, uy = self._get_standard_vars(u, form='h')
         h_b = self.get_h_b(u)
-        if self.wd and False:
-                components = [
-                    [0,0], 
-                    [ 0.5*g*h*h, 0],
-                    [0,0.5*g*h*h ]
+        if self.wd:
+            eta, _,_ = self._get_standard_vars(u,form='eta')
+            components = [
+                [0,0], 
+                [0.5*g*(eta*eta + 2*eta*h_b), 0],
+                [0,0.5*g*(eta*eta + 2*eta*h_b)]
                 ]
         else:
-          #for well balanced
-          components = [
-            [0,0], 
-            [0.5*g*h*h-0.5*g*h_b*h_b, 0],
-            [0,0.5*g*h*h-0.5*g*h_b*h_b]
-          ]
+            #for well balanced
+            components = [
+                [0,0], 
+                [0.5*g*h*h-0.5*g*h_b*h_b, 0],
+                [0,0.5*g*h*h-0.5*g*h_b*h_b]
+            ]
 
         if self.spherical:
             # add spherical correction factor
@@ -227,6 +236,8 @@ class BaseProblem:
                 return as_tensor(components) / R
         else:
             return as_tensor(components)
+
+    
 
     def get_friction(self, u):
         friction_law = self.friction_law
@@ -252,8 +263,8 @@ class BaseProblem:
         elif friction_law == 'mannings':
             #experimental but 1e-16 seems to be ok
             eps = 1e-8
-            self.TAU_const = .03
-            mag_v = conditional(pow(ux*ux + uy*uy, 0.5) < eps, eps, pow(ux*ux + uy*uy, 0.5))
+            self.TAU_const = .02
+            mag_v = conditional(pow(ux*ux + uy*uy, 0.5) < eps, 0, pow(ux*ux + uy*uy, 0.5))
             return as_vector(
                 (0,
                 g*self.TAU_const*self.TAU_const*ux*mag_v*pow(h,-1/3),
@@ -280,65 +291,98 @@ class BaseProblem:
     def make_Source(self, u,form='well_balanced'):
         h, ux, uy = self._get_standard_vars(u, form='h')
         h_b = self.get_h_b(u)
+        #Mark adding nc source for wd
         #h_b = self.h_b
-        if self.spherical:
-            if self.projected:
-                #canonical form is necessary for SUPG terms
+        if self.wd:
+            eta, _, _ = self._get_standard_vars(u, form='eta')
+            if self.spherical:
+                if self.projected:
+                    #pretty sure never used, can remove later
+                    #no well non-well balanced option
+                    g_vec = as_vector((0,#-h * uy * self.tan / R,
+                            -g*(eta)*h_b.dx(0)*self.S, #- h * ux * uy * self.tan / R,
+                            -g*(eta)*h_b.dx(1))) # + h * ux * ux * self.tan / R))
+                else:
+                    #again no non-well balanced form available
+                    g_vec = as_vector(
+                        (
+                            -h * uy * self.tan / R,
+                            -g*eta*h_b.dx(0) * self.S / R - h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
+                            -g*eta*h_b.dx(1) / R + h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
+                            )
+                        )
+            else:
+                #no non-well balanced version
+                print("WD nonspherical\n")
+                g_vec = as_vector(
+                    (
+                        0,
+                        -g*eta*h_b.dx(0),
+                        -g*eta*h_b.dx(1)
+                    )
+                )
+        #no wd
+        else:
+            if self.spherical:
+                if self.projected:
+                    #canonical form is necessary for SUPG terms
+                    if form != 'well_balanced':
+                        g_vec = as_vector(
+                            (
+                                0,#-h * uy * self.tan / R,
+                                -g*h*h_b.dx(0) * self.S ,#- 2*h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
+                                -g*h*h_b.dx(1),# + 2*h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
+                            )
+                        )
+                    #well balanced is default
+                    else:
+                        g_vec = as_vector(
+                            (
+                                -h * uy * self.tan / R,
+                                -g*(h-h_b)*h_b.dx(0) * self.S - 2*h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
+                                -g*(h-h_b)*h_b.dx(1) + 2*h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
+                            )
+                        )
+                else:
+                    if form != 'well_balanced':
+                        g_vec = as_vector(
+                            (
+                                -h * uy * self.tan / R,
+                                -g*h*h_b.dx(0) * self.S / R - h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
+                                -g*h*h_b.dx(1) / R + h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
+                            )
+                        )
+                    #well balanced
+                    else:
+                        g_vec = as_vector(
+                            (
+                                -h * uy * self.tan / R,
+                                -g*(h-h_b)*h_b.dx(0) * self.S / R - h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
+                                -g*(h-h_b)*h_b.dx(1) / R + h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
+                            )
+                        )
+            else:
                 if form != 'well_balanced':
                     g_vec = as_vector(
                         (
-                            0,#-h * uy * self.tan / R,
-                            -g*h*h_b.dx(0) * self.S ,#- 2*h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
-                            -g*h*h_b.dx(1),# + 2*h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
+                            0,
+                            -g*h*h_b.dx(0),
+                            -g*h*h_b.dx(1)
                         )
                     )
+
                 #well balanced is default
                 else:
+                    self.log("USING NONSPHERICAL WELLBALANCED")
                     g_vec = as_vector(
                         (
-                            -h * uy * self.tan / R,
-                            -g*(h-h_b)*h_b.dx(0) * self.S - 2*h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
-                            -g*(h-h_b)*h_b.dx(1) + 2*h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
+                            0,
+                            -g*(h-h_b)*h_b.dx(0),
+                            -g*(h-h_b)*h_b.dx(1)
                         )
                     )
-            else:
-                if form != 'well_balanced':
-                    g_vec = as_vector(
-                        (
-                            -h * uy * self.tan / R,
-                            -g*h*h_b.dx(0) * self.S / R - h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
-                            -g*h*h_b.dx(1) / R + h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
-                        )
-                    )
-                #well balanced
-                else:
-                    g_vec = as_vector(
-                        (
-                            -h * uy * self.tan / R,
-                            -g*(h-h_b)*h_b.dx(0) * self.S / R - h * ux * uy * self.tan / R - 2*uy*h*omega*self.sin,
-                            -g*(h-h_b)*h_b.dx(1) / R + h * ux * ux * self.tan / R + 2*ux*h*omega*self.sin
-                        )
-                    )
-        else:
-            if form != 'well_balanced':
-                g_vec = as_vector(
-                    (
-                        0,
-                        -g*h*h_b.dx(0),
-                        -g*h*h_b.dx(1)
-                    )
-                )
 
-            #well balanced is default
-            else:
-                self.log("USING NONSPHERICAL WELLBALANCED")
-                g_vec = as_vector(
-                    (
-                        0,
-                        -g*(h-h_b)*h_b.dx(0),
-                        -g*(h-h_b)*h_b.dx(1)
-                    )
-                )
+
 
         source = g_vec + self.get_friction(u) 
 
@@ -350,14 +394,13 @@ class BaseProblem:
                 0,
                 -drag_coeff * (p_air / p_water) * windx * wind_mag,
                 -drag_coeff * (p_air / p_water) * windy * wind_mag,
-            ]
+                ]
             #wind_forcing_terms = [0, 30*.001 * windx*wind_mag * (p_air/p_water), 30*.001 * windy *wind_mag * (p_air/p_water)] 
 
             #wind_vec = as_vector(wind_forcing_terms)
             #wind_form = dot(wind_vec, wind_vec) * dx
             #print("Initial wind forcing", fe.assemble_scalar(fe.form(wind_form))**.5)
             #raise ValueError()
-            
             pressure_forcing_terms = [
                 0,
                 h * pressure.dx(0) / (p_water),
@@ -567,7 +610,7 @@ class TidalProblem(BaseProblem):
 
         self.mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[self.x0, self.y0],[self.x1, self.y1]], [self.nx, self.ny])
         self.boundaries = [(1, lambda x: np.isclose(x[0], 0)),
-              (2, lambda x: np.logical_not(np.isclose(x[0],0 )) | np.isclose(x[1],self.y1) |  np.isclose(x[1],self.y0))]
+              (2, lambda x: np.logical_not(np.isclose(x[0],self.x0 )) | np.isclose(x[1],self.y1) |  np.isclose(x[1],self.y0))]
 
 
     def create_bathymetry(self, V):
@@ -655,7 +698,7 @@ class TidalProblem(BaseProblem):
             boundary_conditions.append(bc)
 
         self._boundary_conditions = boundary_conditions
-        self._dirichlet_bcs = [bc._bc for bc in self.boundary_conditions if bc.type == "Open"]
+        self._dirichlet_bcs = []#[bc._bc for bc in self.boundary_conditions if bc.type == "Open"]
 
     def advance_time(self):        
         self.t += self.dt
@@ -1088,15 +1131,29 @@ class ConvergenceProblem(TidalProblem):
 
 @dataclass
 class SlopedBeachProblem(TidalProblem):
+    #from Balzano
+    #"A. Balzano, Evaluation of methods for numerical simulation of wetting and
+    #drying in shallow water flow models, Coastal Engrg. 34 (1998) 83–107."
+    #bathymetry_gradient: float = .1
+    x0: float = 0
+    x1: float = 13800
+    y0: float = 0
+    y1: float =  7200
+    h_b_val: float = 5.0
+    nx: int = 12
+    ny: int = 6
+    friction_law: str = 'mannings'
+    mag: float = 2.0
+    #period is 12 h so 2pi/43200
+    alpha: float = 2.0*np.pi/(12.0*60*60)
+    dramp: float = 2
 
-   bathymetry_gradient: float = .1
-
-   def create_bathymetry(self, V):
-       """Create bathymetry over a given FunctionSpace
-       """
-
-       h_b = fe.Function(V.sub(0).collapse()[0])
-       shoreline_x = self.x0 + (self.x1-self.x0) / 2
-       self.log(f"Location of shoreline: {shoreline_x}")
-       h_b.interpolate(lambda x: self.bathymetry_gradient * (shoreline_x - x[0]))
-       return h_b
+    def create_bathymetry(self, V):
+        """Create bathymetry over a given FunctionSpace
+        """
+        h_b = fe.Function(V.sub(0).collapse()[0])
+        #make shore line at x1
+        shoreline_x = self.x1
+        self.log(f"Location of shoreline: {shoreline_x}")
+        h_b.interpolate(lambda x: self.h_b_val / self.x1 * (shoreline_x - x[0]))
+        return h_b

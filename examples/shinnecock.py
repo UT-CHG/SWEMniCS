@@ -27,7 +27,7 @@ if __name__ == "__main__":
     bath_adjust = 0 if wd else 4.0
     dramp = 2.0
     prob = ADCIRCProblem(adios_file="data/shinnecock_inlet", spherical=is_spherical,
-        solution_var='h', friction_law='quadratic', wd=wd, wd_alpha=args.alpha,
+        solution_var='h', friction_law='mannings', wd=wd, wd_alpha=args.alpha,
         #forcing=GriddedForcing("data/shinnecock_forcing.hdf5"),                 
         dt=dt, bathy_adjustment=bath_adjust, nt=nt,dramp=dramp)
     p_degree = 1

@@ -227,10 +227,13 @@ class ADCIRCProblem(Problems.TidalProblem):
 
     def _create_mesh(self):
         engine = "BP4"
-        self.mesh = adios4dolfinx.read_mesh(MPI.COMM_WORLD, self.adios_file+"_mesh.bp", engine, mesh.GhostMode.shared_facet)
-        V = fe.FunctionSpace(self.mesh, ("P", 1))
+        print(self.adios_file+"_mesh.bp")
+        self.mesh = adios4dolfinx.read_mesh(self.adios_file+"_mesh.bp",comm= MPI.COMM_WORLD, engine=engine, ghost_mode=mesh.GhostMode.shared_facet,legacy=True)
+        #self.mesh = adios4dolfinx.read_mesh(MPI.COMM_WORLD, self.adios_file+"_mesh.bp", engine, mesh.GhostMode.shared_facet,legacy=True)
+        V = fe.functionspace(self.mesh, ("P", 1))
         self.depth = fe.Function(V)
-        adios4dolfinx.read_function(self.depth, self.adios_file+"_depth.bp", engine)
+        #adios4dolfinx.read_function(self.depth, self.adios_file+"_depth.bp", engine)
+        adios4dolfinx.read_function(self.adios_file+"_depth.bp", self.depth, engine=engine,legacy=True)
         with open(self.adios_file+"_boundary.json", "r") as fp:
             info = json.load(fp)
             self.lat0 = info.get('lat0', 0)
@@ -257,6 +260,7 @@ class ADCIRCProblem(Problems.TidalProblem):
         return self.depth + fe.Constant(self.mesh, ScalarType(self.bathy_adjustment))
 
     def make_h_init(self, V):
+        #return self.problem.get_h_b(self.u_n) + self.sea_surface_height
         return self.h_b + self.sea_surface_height
    
     def create_tau(self, V):
@@ -279,7 +283,7 @@ class ADCIRCProblem(Problems.TidalProblem):
         self.dof_open = self._boundary_conditions[0].dofs
         self.ux_dofs_closed = np.array([])
         self.uy_dofs_closed = np.array([])
-        self._dirichlet_bcs = [bc._bc for bc in self.boundary_conditions if bc.type == "Open"]
+        self._dirichlet_bcs = []#[bc._bc for bc in self.boundary_conditions if bc.type == "Open"]
 
     def evaluate_tidal_boundary(self, t):
         return self.boundaries.evaluate_tidal_boundary(t) + self.sea_surface_height
@@ -316,4 +320,5 @@ class ADCIRCProblem(Problems.TidalProblem):
         self.update_boundary()
         if self.forcing is not None:
             self.forcing.evaluate(self.t)
-        self.tidal_potential.evaluate(self.t)
+        if self.spherical:
+            self.tidal_potential.evaluate(self.t)
