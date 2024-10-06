@@ -30,14 +30,10 @@ def run_experiment(name, outdir=None, **kwargs):
     #choose solution variable, either h or eta or flux
     sol_var = 'h'
 
-    L = T = 1
-    #L = 100
-    #T = 1
     prob = DamProblem(
         dt=dt,nt=nt,nx=nx,ny=ny,
         friction_law=fric_law,
         solution_var=sol_var,spherical=False,
-        #L = L, T=T
     )
     p_degree = [1,1]
     rel_toleran=1e-5
