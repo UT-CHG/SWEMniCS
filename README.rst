@@ -16,20 +16,40 @@ Installation
 ============
 
 The recommended way is to first set up a Python environment with fenicsx via conda:
+
 .. code-block:: python
+
 conda create -n fenicsx-env
+
+.. code-block:: python
+
 conda activate fenicsx-env
+
+.. code-block:: python
+
 conda install -c conda-forge fenics-dolfinx mpich pyvista
 
 
-|There are a couple of extra dependencies within the SWEMniCS repo:
+There are a couple of extra dependencies within the SWEMniCS repo:
 
 .. code-block:: python
 
 conda install conda-forge::adios2
+
+.. code-block:: python
+
 pip install matplotlib
+
+.. code-block:: python
+
 pip install scipy
+
+.. code-block:: python
+
 pip install h5py
+
+.. code-block:: python
+
 python -m pip install adios4dolfinx[test]
 
 
