@@ -1147,7 +1147,6 @@ class SlopedBeachProblem(TidalProblem):
     #period is 12 h so 2pi/43200
     alpha: float = 2.0*np.pi/(12.0*60*60)
     dramp: float = 2
-
     def create_bathymetry(self, V):
         """Create bathymetry over a given FunctionSpace
         """
@@ -1157,3 +1156,7 @@ class SlopedBeachProblem(TidalProblem):
         self.log(f"Location of shoreline: {shoreline_x}")
         h_b.interpolate(lambda x: self.h_b_val / self.x1 * (shoreline_x - x[0]))
         return h_b
+    def evaluate_tidal_boundary(self, t):
+        #hard code a ramp
+        phase = 90*np.pi/180
+        return np.tanh(2.0*t/(86400.*self.dramp))*self.mag*np.cos(t*self.alpha-phase)

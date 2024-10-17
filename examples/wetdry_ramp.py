@@ -32,7 +32,22 @@ abs_toleran=1e-6
 max_iter=10
 relax_param = 1.0
 #time series output
-stations = np.array([[13800,3600.5,0.0]])
+stations = np.array([[0.0, 3650.0, 0.0],
+ [1000.0, 3650.0, 0.0],
+ [2000.0, 3650.0, 0.0],
+ [3000.0, 3650.0, 0.0],
+ [4000.0, 3650.0, 0.0],
+ [5000.0, 3650.0, 0.0],
+ [6000.0, 3650.0, 0.0],
+ [7000.0, 3650.0, 0.0],
+ [8000.0, 3650.0, 0.0],
+ [9000.0, 3650.0, 0.0],
+ [10000.0, 3650.0, 0.0],
+ [11000.0, 3650.0, 0.0],
+ [12000.0, 3650.0, 0.0],
+ [13000.0, 3650.0, 0.0],
+ [13500.0, 3650.0, 0.0],
+ [13800.0, 3650.0, 0.0]])
 #create solver object
 
 #cg
@@ -43,7 +58,8 @@ theta=1
 #dg DGImplicit
 solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree)
 params = {"rtol": rel_toleran, "atol": abs_toleran, "max_it":max_iter, "relaxation_parameter":relax_param, "ksp_type": "gmres", "pc_type": "ilu"}#,"pc_factor_mat_solver_type":"mumps"}
-solver.time_loop(solver_parameters=params,stations=stations,plot_every=60,plot_name='Balzano')
+name='Balzano'
+solver.time_loop(solver_parameters=params,stations=stations,plot_every=60,plot_name=name)
 
 #solver.solve()
 #prob.plot_solution(solver.u.sub(0),'Single_time_step')
@@ -65,6 +81,9 @@ if rank ==0:
 	plt.xlabel("t(day)")
 	plt.title('Tidal Velocity for SUPG Scheme')
 	plt.savefig("tidal_velocity_SUPG.png")
+	np.savetxt(f"{name}_p1_wse.csv", solver.vals[:,:,0], delimiter=",")
+	np.savetxt(f"{name}_p1_xvel.csv", solver.vals[:,:,1], delimiter=",")
+	np.savetxt(f"{name}_p1_yvel.csv", solver.vals[:,:,2], delimiter=",")
 
 #Your statements here
 

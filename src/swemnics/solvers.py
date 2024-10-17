@@ -504,6 +504,8 @@ class CGImplicit(BaseSolver):
         """saves time series at stations into a numpy array"""
         h_values = u_sol.sub(0).eval(points_on_proc, self.cells)
         if self.problem.solution_var in ['h', 'flux']: h_values -= self.station_bathy
+        #correct for w/d for nicer plotting
+        #h_values = np.maximum(h_values,-self.station_bathy)
         u_values = u_sol.sub(1).eval(points_on_proc, self.cells)
         u_values = np.hstack([h_values,u_values])
         return u_values
@@ -544,7 +546,10 @@ class CGImplicit(BaseSolver):
         # dimensional scales
         #takes a function and plots as 
         #this will output a vector xyz, want to change
-        self.eta_expr = fe.Expression(self.u.sub(0).collapse() - self.problem.h_b, self.V_scalar.element.interpolation_points())
+        #adjusts for plotting
+        #self.eta_expr = fe.Expression( conditional(self.u.sub(0).collapse() - self.problem.h_b > -self.problem.h_b,  self.u.sub(0).collapse() - self.problem.h_b, -self.problem.h_b ), self.V_scalar.element.interpolation_points())
+        #simple but goes below original bathymetry
+        self.eta_expr = fe.Expression( self.u.sub(0).collapse() - self.problem.h_b , self.V_scalar.element.interpolation_points())
         self.eta_plot.interpolate(self.eta_expr)
 
 
@@ -592,13 +597,17 @@ class CGImplicit(BaseSolver):
             inds = np.concatenate(gathered_inds)
         return inds,vals
 
-    def time_loop(self,solver_parameters,stations=[],plot_every=999999,plot_name='debug_tide'):
+    def time_loop(self,solver_parameters,stations=[],plot_every=999999,plot_name='debug_tide',u_0=None):
         self.log("calling time loop")
         self.points_on_proc = local_points = self.init_stations(stations)
         self.station_data = np.zeros((self.problem.nt+1,local_points.shape[0],3))
 
         #set initial guess for the first time step
-        self.u.x.array[:] = self.u_n.x.array[:]
+        if u_0==None:
+            self.u.x.array[:] = self.u_n.x.array[:]
+        else:
+            self.u_n.x.array[:] = u_0.x.array[:]
+            self.u.x.array[:] = self.u_n.x.array[:]
 
 
         self.solver = solver = self.solve_init(solver_parameters=solver_parameters)
@@ -663,7 +672,7 @@ class CGImplicit(BaseSolver):
             e0=self.problem.check_solution(self.u,self.V,self.problem.t)
             print("L2 error at t=",str(self.problem.t)," is ",str(e0))
 
-        return self.u, vals
+        return self.u, vals, self.eta_plot
 
 
 class DGImplicit(CGImplicit):
