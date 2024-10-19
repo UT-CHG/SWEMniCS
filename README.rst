@@ -3,7 +3,9 @@ SWEMnics
 ========
 
 
-This package allows for solving the shallow water equations with FEniCSx (0.8.0) with a wide variety of numerical methods.
+This package allows for solving the shallow water equations with FEniCSx (0.9.0) with a wide variety of numerical methods.
+
+Note: Now works with fenicsx version 0.9.0
 
 
 Description
