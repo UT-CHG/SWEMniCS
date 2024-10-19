@@ -97,9 +97,15 @@ class CustomNewtonProblem:
             L.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
             L.scale(-1)
             # Compute b - J(u_D-u_(i-1))
-            petsc.apply_lifting(L, [self.jacobian], [self.bcs], x0=[u.vector], scale=1)
+            #080
+            #petsc.apply_lifting(L, [self.jacobian], [self.bcs], x0=[u.vector], scale=1)
+            #090
+            petsc.apply_lifting(L, [self.jacobian], [self.bcs], x0=[u.x.petsc_vec], alpha=1)
             # Set dx|_bc = u_{i-1}-u_D
-            petsc.set_bc(L, self.bcs, u.vector, 1.0)
+            #080
+            #petsc.set_bc(L, self.bcs, u.vector, 1.0)
+            #090
+            petsc.set_bc(L, self.bcs, u.x.petsc_vec, 1.0)
             L.ghostUpdate(addv=PETSc.InsertMode.INSERT_VALUES, mode=PETSc.ScatterMode.FORWARD)
             self.log("Residual norm", L.norm(0))
             # Solve linear problem
@@ -116,12 +122,18 @@ class CustomNewtonProblem:
                 solver.getPC().setType("mat")
                 solver.setOperators(A, self.pc.mat)
                 #start = time.time()
-                solver.solve(L, dx.vector)
+                #080
+                #solver.solve(L, dx.vector)
+                #090
+                solver.solve(L, dx.x.petsc_vec)
                 #print("solved in ", time.time()-start)
             else:
                 #start = time.time()
                 #print("pc type", solver.getPC().getType())
-                solver.solve(L, dx.vector)
+                #080
+                #solver.solve(L, dx.vector)
+                #090
+                solver.solve(L, dx.x.petsc_vec)
                 #print("solved in ", time.time()-start)
             
             dx.x.scatter_forward()
@@ -136,7 +148,10 @@ class CustomNewtonProblem:
             i += 1
             
             if i == 1:
-                self.dx_0_norm = dx.vector.norm(0)
+                #080
+                #self.dx_0_norm = dx.vector.norm(0)
+                #090
+                self.dx_0_norm = dx.x.petsc_vec.norm(0)
                 self.log('dx_0 norm,',self.dx_0_norm)
 
 
@@ -146,11 +161,17 @@ class CustomNewtonProblem:
                 dx.x.array[:] = np.array(dx.x.array[:]/self.dx_0_norm)
             #why wont this update unless I call it??
             #dx.vector.update()
-            dx.vector.assemble()
+            #080
+            #dx.vector.assemble()
+            #090
+            dx.x.petsc_vec.assemble()
             #print('dx after', dx.vector.getArray())
             
             # Compute norm of update
-            correction_norm = dx.vector.norm(0)
+            #080
+            #correction_norm = dx.vector.norm(0)
+            #090
+            correction_norm = dx.x.petsc_vec.norm(0)
 
             self.log(f"Netwon Iteration {i}: Correction norm {correction_norm}")
             if correction_norm < self.atol:
