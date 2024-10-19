@@ -819,7 +819,11 @@ class SUPGImplicit(CGImplicit):
         #V1 = functionspace(domain1,("CG",1))
         height1 = fe.Function(self.cellwise)
         height1.x.array[:num_cells1] = h
-        height1.vector.ghostUpdate()
+        #deprecated
+        #080
+        #height1.vector.ghostUpdate()
+        #090
+        height1.x.petsc_vec.ghostUpdate()
 
   
         # tau from AdH
