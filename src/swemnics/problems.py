@@ -925,9 +925,9 @@ class DamProblem(TidalProblem):
         #      (2, lambda x: np.logical_not(np.isclose(x[0],0 )) & np.logical_not(np.isclose(x[0],x1 )) & (np.isclose(x[1],y1) |  np.isclose(x[1],y0))),
         #      (3, lambda x: np.isclose(x[0],0))]
 
-        self.boundaries = [(1, lambda x: np.isclose(x[0],self.x1)),
-              (2, lambda x: np.logical_not(np.isclose(x[0],0 )) | np.logical_not(np.isclose(x[0],self.x1 ))| np.isclose(x[1],self.y1) |  np.isclose(x[1],self.y0)),
-              (3, lambda x: np.isclose(x[0],0))]
+        self.boundaries = [(1, lambda x: np.isclose(x[0],self.x0)),
+              (2, lambda x: np.logical_not(np.isclose(x[0],0 )) | np.logical_not(np.isclose(x[0],self.x1 ))| np.isclose(x[1],self.y1) |  np.isclose(x[1],self.y0))]#,
+              #(3, lambda x: np.isclose(x[0],0))]
         print("created mesh and boundaries")
 
     def create_bathymetry(self,V):

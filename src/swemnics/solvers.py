@@ -241,19 +241,62 @@ class CGImplicit(BaseSolver):
 
         This method may need to be overridden when implementing a solver with trace variables or an alternate approach to boundary conditions.
         """
-
         boundary_conditions = self.problem.boundary_conditions
-        self.log("have boundary conditions")
         ds_exterior = self.problem.ds
         n = FacetNormal(self.domain)
-        #loop throught boundary conditions to see if there is any wall conditions
-        for condition in boundary_conditions:
-            if condition.type == "Open":
-                self.F += dot(dot(self.Fu_open, n), self.p) * ds_exterior(condition.marker)
-            if condition.type == "Wall":
-                self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker)
-            if condition.type == "OF":
-                self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
+        #slightly different weak enforcement for DG than CG
+        #work in progress, maybe missing Nitsche terms
+        if self.p_type == "CG":
+            self.log("Adding CG boundary conditions weakly")
+            #loop throught boundary conditions to see if there is any wall conditions
+            for condition in boundary_conditions:
+                if condition.type == "Open":
+                    self.F += dot(dot(self.Fu_open, n), self.p) * ds_exterior(condition.marker)
+                if condition.type == "Wall":
+                    self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker)
+                if condition.type == "OF":
+                    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
+        #need to add jump terms for DG stability 
+        elif self.p_type == "DG":
+            
+            self.log("Adding DG boundary conditions weakly")
+            h, ux, uy = self.problem._get_standard_vars(self.u, 'h')
+            h_ex, ux_ex, uy_ex = self.problem._get_standard_vars(self.u_ex, 'h')
+            
+            #need to add jump terms for DG stability
+            boundary_conditions = self.problem.boundary_conditions
+            ds_exterior = self.problem.ds
+            #needed for velocity computations
+            vel = as_vector((ux,uy))
+            un = dot(vel,n)
+            eps=1e-16
+            vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
+
+            #needed for jump calculation on wall
+            jump_Q_wall = as_vector((0,2*h*un*n[0], 2*h*un*n[1]))
+            C_wall =  vnorm+ sqrt(g*h)
+            #velocity has flipped sign in normal direction
+            u_wall = as_vector((self.u[0], self.u[1]*n[1]*n[1] - self.u[1]*n[0]*n[0] - 2*self.u[2]*n[0]*n[1], self.u[2]*n[0]*n[0] - self.u[2]*n[1]*n[1] - 2*self.u[1]*n[0]*n[1]  ))
+            Fu_wall_ext = self.problem.make_Fu(u_wall)
+
+            #needed for jump calculation on open
+            jump_Q_open = as_vector((h - h_ex, h*ux - h_ex*ux_ex, h*uy - h_ex*uy_ex))
+
+            C_open = vnorm + sqrt(g*conditional(h_ex>h,h_ex,h))
+            #h_ex_plus = conditional(h_ex > eps/2 , h_ex, eps)
+
+            #C_open = conditional( (vnorm + sqrt(g*h) ) > (vnorm + sqrt(g*h_ex_plus) ), (vnorm + sqrt(g*h)) ,  (vnorm+ sqrt(g*h_ex_plus)) ) 
+
+            #loop throught boundary conditions to see if there is any wall conditions
+            for condition in boundary_conditions:
+                if condition.type == "Open":
+                    self.F += dot( 0.5*dot(self.Fu_open, n) + 0.5*dot(self.Fu,n) , self.p) * ds_exterior(condition.marker) + dot(0.5*C_open*jump_Q_open, self.p)*ds_exterior(condition.marker)
+                if condition.type == "Wall":
+                    #self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) + dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
+                    self.F += dot(0.5*dot(self.Fu, n) + 0.5*dot(Fu_wall_ext,n), self.p)*ds_exterior(condition.marker) + dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
+                if condition.type == "OF":
+                    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
+
 
 
     def set_initial_condition(self):
@@ -755,6 +798,8 @@ class DGImplicit(CGImplicit):
                     flux = dot(avg(self.Fu), n('+')) + 0.5*C*avg(self.problem.S**2/R)*jump(self.Q)
             else:
                 flux = dot(avg(self.Fu), n('+')) + 0.5*C*jump(self.Q)
+
+
         #Option 2
 
         if self.problem.solution_var == 'flux':
