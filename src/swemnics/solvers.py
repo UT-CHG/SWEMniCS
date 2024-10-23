@@ -270,7 +270,8 @@ class CGImplicit(BaseSolver):
             vel = as_vector((ux,uy))
             un = dot(vel,n)
             eps=1e-16
-            vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
+            #vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
+            vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),0.0)
 
             #needed for jump calculation on wall
             jump_Q_wall = as_vector((0,2*h*un*n[0], 2*h*un*n[1]))
@@ -782,8 +783,12 @@ class DGImplicit(CGImplicit):
             vela =  as_vector((ux('+'),uy('+')))
             velb =  as_vector((ux('-'),uy('-')))
             
-            vnorma = conditional(dot(vela,vela) > eps,sqrt(dot(vela,vela)),np.sqrt(eps))
-            vnormb = conditional(dot(velb,velb) > eps,sqrt(dot(velb,velb)),np.sqrt(eps))
+            #Mark looking at treatment conditionals
+            #vnorma = conditional(dot(vela,vela) > eps,sqrt(dot(vela,vela)),np.sqrt(eps))
+            #vnormb = conditional(dot(velb,velb) > eps,sqrt(dot(velb,velb)),np.sqrt(eps))
+
+            vnorma = conditional(dot(vela,vela) > eps,sqrt(dot(vela,vela)),0.0)
+            vnormb = conditional(dot(velb,velb) > eps,sqrt(dot(velb,velb)),0.0)
 
             #TODO replace conditionals with smoother transition
             C = conditional( (vnorma + sqrt(g*h('+')) ) > (vnormb + sqrt(g*h('-')) ), (vnorma + sqrt(g*h('+'))) ,  (vnormb + sqrt(g*h('-'))) ) 
