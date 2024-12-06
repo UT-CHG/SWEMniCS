@@ -9,7 +9,10 @@ from mpi4py import MPI
 from dataclasses import dataclass
 import adios4dolfinx
 from dolfinx import fem as fe, mesh, cpp
-import pyvista
+try:
+    import pyvista
+except ImportError:
+    print("Must install pyvista for plotting to work!")
 import dolfinx.plot
 import numpy as np
 import ufl
@@ -255,7 +258,7 @@ class ADCIRCProblem(Problems.TidalProblem):
 
         if os.path.exists(self.adios_file+"_mannings_n.bp"):
             self.mannings_n = fe.Function(V)
-            adios4dolfinx.read_function(self.mannings_n, self.adios_file+"_mannings_n.bp", engine)
+            adios4dolfinx.read_function(self.adios_file+"_mannings_n.bp", self.mannings_n, engine)
 
     def create_bathymetry(self, V):
         if self.min_bathy is not None:

@@ -70,6 +70,6 @@ def MarkBoundary(domain,boundaries):
         facet_markers.append(np.full_like(facets, marker))
     facet_indices = np.hstack(facet_indices).astype(np.int32)
     facet_markers = np.hstack(facet_markers).astype(np.int32)
-    sorted_facets = np.argsort(facet_indices)
-    facet_tag = mesh.meshtags(domain, fdim, facet_indices[sorted_facets], facet_markers[sorted_facets])
+    unique_facets, idx = np.unique(facet_indices, return_index=True)
+    facet_tag = mesh.meshtags(domain, fdim, unique_facets, facet_markers[idx])
     return facet_markers,facet_tag

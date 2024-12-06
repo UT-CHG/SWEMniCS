@@ -28,7 +28,7 @@ from ufl.operators import cell_avg
 from mpi4py import MPI
 from petsc4py import PETSc
 import numpy as np
-from swemnics.newton import CustomNewtonProblem, NewtonSolver
+from swemnics.newton import CustomNewtonProblem
 from swemnics.constants import g, R
 try:
   import pyvista
@@ -44,7 +44,7 @@ class BaseSolver:
     """Defines a base solver class that solves the steady-state shallow-water equations.
     """
 
-    def __init__(self,problem,theta=.5,p_degree=[1,1],p_type="CG",swe_type="full"):
+    def __init__(self,problem,theta=.5,p_degree=[1,1],p_type="CG",swe_type="full",cuda=False):
         r"""Iniitalize the solver.
         
         Args: 
@@ -67,12 +67,13 @@ class BaseSolver:
         self.names = ["eta","u","v"]
         #extra optional parameter added for linearized
         self.swe_type=swe_type
+        self.cuda = cuda
         self.log("SWE TYPE",self.swe_type)
         if self.wd:
             self.log("Wetting drying activated \n")
         else:
             self.log("Wetting drying NOT activated \n")
-
+        
         self.init_fields()
         self.init_weak_form()
 
@@ -432,7 +433,7 @@ class CGImplicit(BaseSolver):
         """
 
         #utilize the custom Newton solver class instead of the fe.petsc Nonlinear class
-        Newton_obj = CustomNewtonProblem(self,solver_parameters=solver_parameters)
+        Newton_obj = CustomNewtonProblem(self,solver_parameters=solver_parameters, cuda=self.cuda)
         return Newton_obj
     
     def solve_timestep(self,solver):
@@ -521,22 +522,23 @@ class CGImplicit(BaseSolver):
             bb_tree = geometry.bb_tree(domain, domain.topology.dim)
         cells = []
         points_on_proc = []
-        # Find cells whose bounding-box collide with the the points
-        try:
-            #060
-            cell_candidates = geometry.compute_collisions(bb_tree, points)
-        except:
-            #080
-            cell_candidates = geometry.compute_collisions_points(bb_tree, points)
-        # Choose one of the cells that contains the point
-        colliding_cells = geometry.compute_colliding_cells(domain, cell_candidates, points)
         self.station_index = []
-        for i, point in enumerate(points):
-            if len(colliding_cells.links(i))>0:
-                points_on_proc.append(point)
-                cells.append(colliding_cells.links(i)[0])
-                self.station_index.append(i)
-        self.cells =cells
+        if len(points):
+            # Find cells whose bounding-box collide with the the points
+            try:
+                #060
+                cell_candidates = geometry.compute_collisions(bb_tree, points)
+            except:
+                #080
+                cell_candidates = geometry.compute_collisions_points(bb_tree, points)
+            # Choose one of the cells that contains the point
+            colliding_cells = geometry.compute_colliding_cells(domain, cell_candidates, points)
+            for i, point in enumerate(points):
+                if len(colliding_cells.links(i))>0:
+                    points_on_proc.append(point)
+                    cells.append(colliding_cells.links(i)[0])
+                    self.station_index.append(i)
+        self.cells = cells
         bathy_func = fe.Function(self.V_scalar)
         bathy_func.interpolate(fe.Expression(self.problem.h_b, self.V_scalar.element.interpolation_points()))
         self.station_bathy = bathy_func.eval(points_on_proc, self.cells)
