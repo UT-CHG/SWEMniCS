@@ -2,7 +2,6 @@ from swemnics import solvers as Solvers
 from swemnics.adcirc_problem import ADCIRCProblem
 from mpi4py import MPI
 import numpy as np
-import matplotlib.pyplot as plt
 from swemnics.forcing import GriddedForcing
 from swemnics.constants import R
 import time
@@ -30,6 +29,8 @@ if __name__ == "__main__":
     parser.add_argument("--no-plot", action="store_true", default=False)
     parser.add_argument("--stations", default=None)
     parser.add_argument("--friction", default='quadratic', choices=['linear', 'quadratic', 'nolibf2', 'mannings'])
+    parser.add_argument("--mesh", default="small_gulf")
+    parser.add_argument("--cuda", action="store_true", default=False)
     args = parser.parse_args()
 
 
@@ -44,7 +45,7 @@ if __name__ == "__main__":
     # so this example is purely tidal
     forcing=None
 
-    prob = ADCIRCProblem(adios_file="data/small_gulf", spherical=is_spherical,
+    prob = ADCIRCProblem(adios_file="data/"+args.mesh, spherical=is_spherical,
         solution_var='h',
         friction_law=args.friction,
         forcing=forcing,
@@ -53,13 +54,14 @@ if __name__ == "__main__":
                         sea_surface_height=.22,
                         t=t,
                         bathy_hack_func = bathy_hack_func,
-                        min_bathy=0.3)
+                        min_bathy=0.3
+                        )
     #prob.plot_mesh()
     p_degree = 1
     #rel_toleran=1e-6
     #abs_toleran=1e-6
     rel_toleran=abs_toleran=1e-5
-    max_iter=100
+    max_iter=20
     relax_param = 1
     theta=1
     
@@ -76,7 +78,7 @@ if __name__ == "__main__":
       solver = Solvers.SUPGImplicit(prob,theta,p_degree=p_degree)
     #dg DGImplicit
     elif args.solver == 'dg':
-      solver = Solvers.DGImplicit(prob,theta, p_degree=p_degree)
+      solver = Solvers.DGImplicit(prob,theta, p_degree=p_degree, cuda=args.cuda)
     else:
       raise ValueError(f"Unrecognized solver {args.solver}")
     #Dg continuity CG momentum

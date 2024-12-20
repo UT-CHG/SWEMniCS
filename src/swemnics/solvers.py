@@ -68,6 +68,7 @@ class BaseSolver:
         #extra optional parameter added for linearized
         self.swe_type=swe_type
         self.cuda = cuda
+        self.problem.set_cuda(cuda)
         self.log("SWE TYPE",self.swe_type)
         if self.wd:
             self.log("Wetting drying activated \n")
@@ -718,6 +719,8 @@ class CGImplicit(BaseSolver):
             e0=self.problem.check_solution(self.u,self.V,self.problem.t)
             print("L2 error at t=",str(self.problem.t)," is ",str(e0))
 
+        if not hasattr(self, 'eta_plot'):
+            self.eta_plot = None
         return self.u, vals, self.eta_plot
 
 

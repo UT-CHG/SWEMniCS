@@ -21,7 +21,11 @@ except ImportError:
   use_basix=True
   import basix
   from basix.ufl import element, mixed_element
-
+try:
+    import cudolfinx as cufem
+    have_cuda = True
+except ImportError:
+    have_cuda = False
 from petsc4py.PETSc import ScalarType
 from swemnics.boundarycondition import BoundaryCondition,MarkBoundary
 from dataclasses import dataclass
@@ -122,8 +126,6 @@ class BaseProblem:
             if self.wd:
                 if form =='h' or form =='flux':
                     h = h + self._wd_f(h)
-            else:
-                print("WD NONACTIVE")
             hux, huy = h*ux, h*uy
         elif self.solution_var == 'eta':
             eta, ux, uy = u[0], u[1], u[2]
@@ -581,6 +583,15 @@ class BaseProblem:
 
         return g
 
+    def set_cuda(self, cuda):
+        """Set cuda flag."""
+
+        self.cuda = cuda
+        if cuda:
+            if not have_cuda:
+                raise RuntimeError("Must have cudolfinx installed to use CUDA backend!")
+            if self.mesh.comm.Get_size() > 1:
+                self.mesh = cufem.ghost_layer_mesh(self.mesh)
 
 @dataclass
 class TidalProblem(BaseProblem):

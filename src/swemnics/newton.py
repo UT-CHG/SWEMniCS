@@ -16,6 +16,7 @@ import numpy.linalg as la
 import time
 try:
     import cudolfinx as cufem
+    from cudolfinx.la import CUDAVector
     have_cuda = True
 except ImportError:
     have_cuda = False
@@ -43,13 +44,11 @@ class CustomNewtonProblem:
         self.cuda = cuda
         if cuda:
             self.asm = cufem.CUDAAssembler()
-            print("Created CUDAAssembler")
             self.residual = cufem.form(self.F)
             self.jacobian = cufem.form(self.J)
         else:
             self.residual = fe.form(self.F)
             self.jacobian = fe.form(self.J)
-        print("Created forms")
         self.bcs = obj1.problem.dirichlet_bcs
         self.comm = obj1.problem.mesh.comm
 
@@ -64,7 +63,6 @@ class CustomNewtonProblem:
         #underlying linear solver
         #default for serial is lu, default for mulitprocessor is gmres
         if self.comm.Get_size() == 1:
-            print("serial run")
             self.ksp_type = "gmres"#preonly
             self.pc_type = "ilu"#lu
         else:
@@ -89,6 +87,10 @@ class CustomNewtonProblem:
         else:
             self.solver.setOperators(self.A)
         self.pc = self.solver.getPC()
+        # PETSC doesn't support ILU-type pcs on the GPU anymore
+        if self.cuda and self.pc_type in ["bjacobi", "ilu"]:
+            self.pc_type = "jacobi"
+        self.log("pc type", self.pc_type)
         self.pc.setType(self.pc_type)
 
 
@@ -108,21 +110,27 @@ class CustomNewtonProblem:
             dx = self.dx
         if self.cuda and u.x.petsc_vec.getType() != PETSc.Vec.Type.CUDA:
             u.x.petsc_vec.setType(PETSc.Vec.Type.CUDA)
+            self.u_vec = CUDAVector(self.asm._ctx, u.x.petsc_vec)
+        if self.cuda:
+            # Update all Dirichlet boundary conditions
+            self.bcs.update()
         i = 0
         rank = self.comm.rank
         A, L, solver = self.A, self.L, self.solver
         relaxation_parameter = self.relaxation_parameter
         while i < self.max_it:
             # Assemble Jacobian and residual
-            print("starting newton iteration ", i)
+            self.log("starting newton iteration ", i)
             if self.cuda:
+                self.jacobian.to_device()
+                self.residual.to_device()
                 self.asm.assemble_matrix(self.jacobian, mat=A)
                 A.assemble()
                 self.asm.assemble_vector(self.residual, L)
                 rhs = L.vector
                 rhs.scale(-1)
-                self.asm.apply_lifting(L, [self.jacobian], [self.bcs], x0=[u.x.petsc_vec])
-                self.asm.set_bc(L, self.bcs, u.x.petsc_vec, u.function_space, 1.0)
+                self.asm.apply_lifting(L, [self.jacobian], [self.bcs], x0=[self.u_vec])
+                self.asm.set_bc(L, self.bcs, u.function_space, x0=self.u_vec, scale=1.0)
             else:
                 with L.localForm() as loc_L:
                     loc_L.set(0)
@@ -139,6 +147,7 @@ class CustomNewtonProblem:
                 L.ghostUpdate(addv=PETSc.InsertMode.INSERT_VALUES, mode=PETSc.ScatterMode.FORWARD)
                 rhs = L
             self.log("Residual norm", rhs.norm(0))
+
             # Solve linear problem
             solver.solve(rhs, dx.x.petsc_vec)
             
@@ -148,19 +157,25 @@ class CustomNewtonProblem:
             if solver.getConvergedReason() == -9:
                 raise RuntimeError("Linear Solver failed due to nans or infs!!!!")
             # Update u_{i+1} = u_i + delta x_i
-            u.x.array[:] += relaxation_parameter*dx.x.array[:]
-            
+            u.x.petsc_vec.axpy(relaxation_parameter, dx.x.petsc_vec)
+            if self.cuda:
+                # Ensure host-side values of u match device-side values
+                nlocal = len(u.x.petsc_vec.array)
+                # don't copy ghosts as we can't explicitly update them
+                u.x.array[:nlocal] = u.x.petsc_vec.array
+
+            u.x.scatter_forward() 
             i += 1
             
+            dx_norm = dx.x.petsc_vec.norm(0)
             if i == 1:
-                self.dx_0_norm = dx.x.petsc_vec.norm(0)
+                self.dx_0_norm = dx_norm
                 self.log('dx_0 norm,',self.dx_0_norm)
-
-
+            
             if self.dx_0_norm > 1e-8:
-                dx.x.array[:] = np.array(dx.x.array[:]/self.dx_0_norm)
-            dx.x.petsc_vec.assemble()
-            correction_norm = dx.x.petsc_vec.norm(0)
+                correction_norm = dx_norm/self.dx_0_norm
+            else:
+                correction_norm = dx_norm
 
             self.log(f"Netwon Iteration {i}: Correction norm {correction_norm}")
             if correction_norm < self.atol:

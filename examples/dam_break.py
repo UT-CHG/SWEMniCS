@@ -73,13 +73,13 @@ def run_experiment(name, outdir=None, **kwargs):
     #prob.plot_solution(solver.u.sub(0),'Single_time_step')
     #print(solver.station_data.shape)
     #save array for post processing
-    if outdir is not None:
-        os.makedirs(outdir, exist_ok=True)        
-    outdir = "" if outdir is None else outdir+"/"
-    np.savetxt(f"{outdir}{name}_p1_stations_h.csv", solver.vals[:,:,0], delimiter=",")
-    np.savetxt(f"{outdir}{name}_p1_stations_xvel.csv", solver.vals[:,:,1], delimiter=",")
-    np.savetxt(f"{outdir}{name}_p1_stations_yvel.csv", solver.vals[:,:,2], delimiter=",")
     if rank ==0:
+        if outdir is not None:
+            os.makedirs(outdir, exist_ok=True)       
+        outdir = "" if outdir is None else outdir+"/"
+        np.savetxt(f"{outdir}{name}_p1_stations_h.csv", solver.vals[:,:,0], delimiter=",")
+        np.savetxt(f"{outdir}{name}_p1_stations_xvel.csv", solver.vals[:,:,1], delimiter=",")
+        np.savetxt(f"{outdir}{name}_p1_stations_yvel.csv", solver.vals[:,:,2], delimiter=",")
         x = np.linspace(0,Lx,nx)
         plt_nums = [0,40,nt]
     	#note that station data is array with shape nt x nstattion x 3 (h,u,v)
@@ -132,5 +132,6 @@ if __name__ == "__main__":
         "solver",
         choices=["cg", "supg", "dg", "dgcg"]
     )
+    parser.add_argument("--cuda", action="store_true", default=False)
     args = parser.parse_args() 
-    run_experiment(args.solver)
+    run_experiment(args.solver, cuda=args.cuda)
