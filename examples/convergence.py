@@ -15,8 +15,8 @@ def run_experiment(name):
     nx = 24  # 48#24#12#6
     ny = 12  # 24#12#6#3
     dt = 5
-    t_f = 60 * 60 * 24 * 2  # 7*24*60*60
-    plot_each = 180
+    t_f = 60 * 60 * 2  # * 24 * 2  # 7*24*60*60
+    plot_each = 20  # 180
     # t_f = 1000
     nt = int(np.ceil(t_f / dt))
     print(f"Number of time steps {nt}")
@@ -130,7 +130,6 @@ def run_experiment(name):
             linewidth=2,
             label="h at " + str(x_pt),
         )
-        plt.plot(t, zeta_exact, "k", label="Exact solution")
         # plt.plot(np.linspace(0,1000,100), solver.vals[1,:,0], linewidth=2, label="h at 100")
         # plt.plot(points_on_proc[:, 1], p_values, "b--", linewidth = 2, label="Load")
         plt.grid(True)
