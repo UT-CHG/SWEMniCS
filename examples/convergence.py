@@ -12,10 +12,9 @@ def run_experiment(name):
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
 
-    nx = 48  # 48#24#12#6
-    ny = 24  # 24#12#6#3
+    nx = 24  # 48#24#12#6
+    ny = 12  # 24#12#6#3
     dt = 5
-    t = 0
     t_f = 60 * 60 * 24 * 2  # 7*24*60*60
     plot_each = 180
     # t_f = 1000
@@ -74,6 +73,7 @@ def run_experiment(name):
         * (np.sin(beta * (x_pt)))
         / (np.cos(beta * (xL)))
     )
+
     # overwrite
     t = np.linspace(0, t_f / (60 * 60 * 24), nt + 1)
 
@@ -140,13 +140,14 @@ def run_experiment(name):
         plt.legend()
         plt.savefig(f"Tidal_height_{name}_order1_dt.png")
         plt.close()
+        plt.figure()
         plt.plot(t, vel_exact, "k", label="Exact solution")
         plt.plot(
             np.linspace(0, t_f / (60 * 60 * 24), nt + 1),
             solver.vals[:, :, 1].flatten(),
             "--",
             linewidth=2,
-            label=f"v at {x_pt:.2e}",
+            label=f"v at x={x_pt:.2e}",
         )
         # plt.plot(points_on_proc[:, 1], p_values, "b--", linewidth = 2, label="Load")
         plt.grid(True)

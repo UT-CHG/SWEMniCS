@@ -309,6 +309,7 @@ class CGImplicit(BaseSolver):
         """
         if self.problem.solution_var =='h' or self.problem.solution_var =='flux':
             #rewrite for mixed element
+
             self.log("setting initial condition")
             #if the initial condition is specified set this, if not assume level starting condition
             if self.problem.h_init is None:
@@ -324,7 +325,7 @@ class CGImplicit(BaseSolver):
                         self.V.sub(0).element.interpolation_points())
                 )
             if self.problem.vel_init is None:
-                #by default assume 0 velcity everywhere    
+                #by default assume 0 velocity everywhere    
                 self.u_n.sub(1).interpolate(
                     fe.Expression(
                         as_vector([
@@ -334,13 +335,8 @@ class CGImplicit(BaseSolver):
                         self.V.sub(1).element.interpolation_points())
                 )
             else:
-                #by default assume 0 velcity everywhere    
                 self.u_n.sub(1).interpolate(
-                    fe.Expression(
-                        as_vector([
-                            fe.Constant(self.domain, ScalarType(0.00)),
-                            fe.Constant(self.domain, ScalarType(0.00))
-                        ]),
+                    fe.Expression(self.problem.vel_init,                     
                         self.V.sub(1).element.interpolation_points())
                 )
 
