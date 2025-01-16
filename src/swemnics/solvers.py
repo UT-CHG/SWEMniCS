@@ -39,13 +39,13 @@ except ImportError:
   have_pyvista = False
 
 from petsc4py.PETSc import ScalarType
-
+from typing import Literal
 
 class BaseSolver:
     """Defines a base solver class that solves the steady-state shallow-water equations.
     """
 
-    def __init__(self,problem,theta=.5,p_degree=[1,1],p_type="CG",swe_type="full"):
+    def __init__(self,problem,theta=.5,p_degree=[1,1],p_type: Literal["CG", "DG"]="CG",swe_type="full"):
         r"""Iniitalize the solver.
         
         Args: 
