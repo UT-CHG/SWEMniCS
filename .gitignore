@@ -51,3 +51,8 @@ MANIFEST
 # Per-project virtualenvs
 .venv*/
 .conda*/
+
+
+*.bp
+*.png
+*.csv

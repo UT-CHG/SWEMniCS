@@ -1,0 +1,57 @@
+name: Test MPC
+
+on:
+  # Trigger tests on push
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # '*' is a special character in YAML, so string must be quoted
+    - cron: "0 8 * * *"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ghcr.io/fenics/dolfinx/dolfinx:stable
+
+    strategy:
+      matrix:
+        build_mode: [Release, Debug]
+        CXX: [c++]
+        CC: [cc]
+    env:
+      HDF5_MPI: "ON"
+      HDF5_DIR: "/usr/local/"
+      DEB_PYTHON_INSTALL_LAYOUT: deb_system
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: upgrade pip
+        run: python3 -m pip install  --upgrade setuptools pip
+
+      #   - name: Check formatting
+      #     run: |
+      #       python3 -m pip install  ruff
+      #       ruff check
+      #       ruff format
+
+      #   - name: Check typing
+      #     run: |
+      #       python3 -m pip install  mypy
+      #       cd python
+      #       python3 -m mypy . --exclude=build
+
+      - name: Install h5py
+        run: |
+          python3 -m pip install --no-build-isolation  --no-cache-dir --no-binary=h5py h5py
+
+      - name: Install package
+        run: |
+          python3 -m pip install --no-build-isolation --no-cache-dir -e .[examples]
+
+      - name: Run examples
+        working-directory: examples
+        run: |
+          python3 convergence.py dg

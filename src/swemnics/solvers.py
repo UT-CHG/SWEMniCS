@@ -13,10 +13,12 @@ except ImportError:
 
 from ufl import (
     TestFunction, TrialFunction, FacetNormal, as_matrix,
-    as_vector, as_tensor, dot, inner, grad, dx, ds, dS,
-    jump, avg,sqrt,conditional,gt,div,nabla_div,tr,diag,sign,elem_mult,
-    TestFunctions,cell_avg
+    as_vector, dot, inner, grad, dx, ds, dS,
+    jump, avg,sqrt,conditional,div,elem_mult,
+    TestFunctions
 )
+from ufl.classes import Zero
+
 try:
   from ufl import FiniteElement, VectorElement, MixedElement
   use_basix=False
@@ -24,11 +26,10 @@ except ImportError:
   use_basix=True
   from basix.ufl import element, mixed_element
 
-from ufl.operators import cell_avg
 from mpi4py import MPI
 from petsc4py import PETSc
 import numpy as np
-from swemnics.newton import CustomNewtonProblem, NewtonSolver
+from swemnics.newton import CustomNewtonProblem
 from swemnics.constants import g, R
 try:
   import pyvista
@@ -374,15 +375,16 @@ class CGImplicit(BaseSolver):
 
         if self.swe_type=="full":
             self.Fu = Fu = self.problem.make_Fu(self.u)
-            self.Fu_wall = Fu_wall = self.problem.make_Fu_wall(self.u)
+            self.Fu_wall = self.problem.make_Fu_wall(self.u)
             self.u_ex = as_vector((self.problem.u_ex[0],self.u[1],self.u[2]))
-            self.Fu_open= Fu_open = self.problem.make_Fu(self.u_ex)
+            self.Fu_open= self.problem.make_Fu(self.u_ex)
             self.S = self.problem.make_Source(self.u)
         elif self.swe_type=="linear":
-            self.Fu = Fu = self.problem.make_Fu_linearized(self.u)
-            self.Fu_wall = Fu_wall = self.problem.make_Fu_top_wall_linearized(self.u)
-            self.Fu_side_wall = Fu_side_wall = self.problem.make_Fu_side_wall_linearized(self.u)
+            self.Fu = self.problem.make_Fu_linearized(self.u)
+            self.Fu_wall = self.problem.make_Fu_top_wall_linearized(self.u)
+            self.Fu_side_wall  = self.problem.make_Fu_side_wall_linearized(self.u)
             self.S = self.problem.make_Source_linearized(self.u)
+            self.Fu_open = Zero((3, 2))
         else:
             raise Exception("Sorry, swe_type must either be linear or full, not %s" %self.swe_type)
 
@@ -392,7 +394,7 @@ class CGImplicit(BaseSolver):
         self.theta1 = theta1 = fe.Constant(self.domain, PETSc.ScalarType(theta))
         
         #start adding to residual
-        self.F = -inner(Fu,grad(self.p))*dx
+        self.F = -inner(self.Fu,grad(self.p))*dx
         self.add_bcs_to_weak_form()
 
         self.dt = self.problem.dt
