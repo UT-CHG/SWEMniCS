@@ -442,24 +442,12 @@ class BaseProblem(abc.ABC):
         else:
             return as_tensor(components)
 
-    def make_Fu_top_wall_linearized(self, u):
+    def make_Fu_wall_linearized(self, u):
         h, ux, uy = self._get_standard_vars(u, form='h')
         h_b = self.get_h_b(u)
         #this would be u dot n =0 
         components = [
-            [h_b*ux,0], 
-            [g*h-g*h_b, 0],
-            [0,g*h-g*h_b]
-        ]
-        return as_tensor(components)
-
-        
-    def make_Fu_side_wall_linearized(self, u):
-        h, ux, uy = self._get_standard_vars(u, form='h')
-        h_b = self.get_h_b(u)
-        #this would be u dot n =0 
-        components = [
-            [0,h_b*uy], 
+            [0,0], 
             [g*h-g*h_b, 0],
             [0,g*h-g*h_b]
         ]
@@ -707,6 +695,13 @@ class TidalProblem(BaseProblem):
 
         self._boundary_conditions = boundary_conditions
         self._dirichlet_bcs = []#[bc._bc for bc in self.boundary_conditions if bc.type == "Open"]
+    def make_h_init(self, V):
+        self.h_init =  fe.Function(V)
+        self.h_init.interpolate(self.h_b)
+        
+    def make_vel_init(self, V):
+        self.vel_init =  fe.Function(V)
+        self.vel_init.interpolate(lambda x: (0*x[0],0*x[0]))
 
     def advance_time(self):        
         self.t += self.dt
@@ -902,6 +897,7 @@ class RainProblem(TidalProblem):
             self.forcing.evaluate(self.t)
         self.rain.evaluate(self.t)
 
+
 @dataclass
 class DamProblem(TidalProblem):        
     """ Problem on a square domain with an extruded square
@@ -1038,14 +1034,8 @@ class ConvergenceProblem(TidalProblem):
 
         self.mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[self.x0, self.y0],[self.x1, self.y1]], [self.nx, self.ny])
         self.boundaries = [(1, lambda x: np.isclose(x[0], self.x1)),
-                            (2, lambda x: np.isclose(x[1],self.y1) |  np.isclose(x[1],self.y0)),
-                            (4, lambda x:  np.isclose(x[0],self.x0))]
-                            #(2, lambda x: np.isclose(x[0],self.x0) | np.isclose(x[1],self.y0) | np.isclose(x[1],self.y1))]
+            (2, lambda x: np.isclose(x[1],self.y1) |  np.isclose(x[1],self.y0) | np.isclose(x[0],self.x0))]                   
 
-        '''
-                            (2, lambda x:  np.isclose(x[1],self.y1)| np.isclose(x[1],self.y0) ),
-                            (4, lambda x:  np.isclose(x[0],self.x0)   ) ]
-        '''
 
     def create_bathymetry(self, V):
         """Create bathymetry over a given FunctionSpace
