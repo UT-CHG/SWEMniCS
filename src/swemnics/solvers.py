@@ -262,7 +262,7 @@ class CGImplicit(BaseSolver):
             
             self.log("Adding DG boundary conditions weakly")
             h, ux, uy = self.problem._get_standard_vars(self.u, 'h')
-            h_ex, ux_ex, uy_ex = self.problem._get_standard_vars(self.u_ex, 'h')
+            h_ex, ux_ex, uy_ex = self.problem._get_standard_vars(self.problem.u_ex, 'h')
             
             #need to add jump terms for DG stability
             boundary_conditions = self.problem.boundary_conditions
