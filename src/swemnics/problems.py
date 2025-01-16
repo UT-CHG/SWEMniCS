@@ -4,6 +4,7 @@ A set of classes defining different test cases for the shallow water equations.
 Problem classes contain most of the logic for building the flux and forcing tensors. They also specify the mesh and boundary conditions for each test scenario.
 """
 
+import abc
 from dolfinx import fem as fe
 try:
   from dolfinx.fem import functionspace
@@ -13,14 +14,14 @@ from dolfinx import mesh,io
 from mpi4py import MPI
 import numpy as np
 import ufl
-from ufl import (dot,div, as_tensor, as_vector, inner, dx, Measure, sqrt,conditional)
+from ufl import (div, as_tensor, as_vector, inner, dx, Measure, sqrt,conditional)
 try:
-  from ufl import FiniteElement, VectorElement, MixedElement
+  from ufl import VectorElement
   use_basix=False
 except ImportError:
   use_basix=True
   import basix
-  from basix.ufl import element, mixed_element
+  from basix.ufl import element
 
 from petsc4py.PETSc import ScalarType
 from swemnics.boundarycondition import BoundaryCondition,MarkBoundary
@@ -32,7 +33,7 @@ import h5py
 
 
 @dataclass
-class BaseProblem:
+class BaseProblem(abc.ABC):
     """Steady-state problem on a unit box
     """
     h_init: float = None
@@ -633,8 +634,13 @@ class TidalProblem(BaseProblem):
         if self.friction_law in ['linear', 'mannings','nolibf2','quadratic']:
             self.TAU_const = fe.Constant(self.mesh, ScalarType(self._TAU))
 
+    @abc.abstractmethod
     def make_h_init(self, V):
-        return self.h_b 
+        ...
+
+    @abc.abstractmethod
+    def make_vel_init(self, V):
+        ...
 
     def init_V(self, V):
         """Initialize the space V in which the problem will be solved.
@@ -644,10 +650,12 @@ class TidalProblem(BaseProblem):
         """
         super().init_V(V)
         self.V = V
-        self.u_ex = fe.Function(V)
+        
+        fe.Function(V)
         self.init_bcs()        
         self.h_b = self.create_bathymetry(V)
-        self.h_init = self.make_h_init(V.sub(0).collapse()[0])
+        self.make_h_init(V.sub(0).collapse()[0])
+        self.make_vel_init(V.sub(1).collapse()[0])
         self.create_tau(V)
         self.update_boundary()
 
@@ -940,13 +948,11 @@ class DamProblem(TidalProblem):
         #Discontinuous bathy
         #note, only makes sense for DG
         V_bath = functionspace(self.mesh, ("DG", 0))
-        self.h_init = self.make_h_init(V_bath)
+        self.make_h_init(V_bath)
     
     def make_h_init(self, V):
-        h_init =  fe.Function(V)        
-        h_init.interpolate(lambda x: self.floor - (self.mag)*(x[0]>500))
-
-        return h_init
+        self.h_init =  fe.Function(V)        
+        self.h_init.interpolate(lambda x: self.floor - (self.mag)*(x[0]>500))
     
     def update_boundary(self):
         if self.solution_var == 'eta':
@@ -1052,7 +1058,7 @@ class ConvergenceProblem(TidalProblem):
         return self.mag*np.cos(t*self.alpha)
     
     def make_h_init(self, V):
-        h_init =  fe.Function(V)
+        self.h_init =  fe.Function(V)
         #Compute analytic solution
         #Analytic equation
         omega=0.00014051891708
@@ -1066,14 +1072,10 @@ class ConvergenceProblem(TidalProblem):
         alpha_0=0.3
         xL = 90000.0
         t=0
-
+        self.h_init.interpolate(lambda x: H0+np.real(alpha_0*np.exp(1j*omega*t)*((np.cos(beta*(x[0])))/(np.cos(beta*xL))))  )
         
-        h_init.interpolate(lambda x: H0+np.real(alpha_0*np.exp(1j*omega*t)*((np.cos(beta*(x[0])))/(np.cos(beta*xL))))  )
-        
-        return h_init
-
     def make_vel_init(self, V):
-        vel_init =  fe.Function(V)
+        self.vel_init =  fe.Function(V)
         #Analytic equation
         omega=0.00014051891708
         #omega=0.00014051891708/(24.0*2.0)
@@ -1086,10 +1088,7 @@ class ConvergenceProblem(TidalProblem):
         alpha_0=0.3
         xL = 90000.0
         t=0
-
-        vel_init.interpolate(lambda x: (np.real(-1j*omega*alpha_0/(beta*H0)*np.exp(1j*omega*t)*(np.sin(beta*(x[0])))/(np.cos(beta*(xL))) ),0*x[0]))        
-        
-        return vel_init
+        self.vel_init.interpolate(lambda x: (np.real(-1j*omega*alpha_0/(beta*H0)*np.exp(1j*omega*t)*(np.sin(beta*(x[0])))/(np.cos(beta*(xL))) ),0*x[0]))
     
     def check_solution(self, u_sol,V, t):
         """Check the solution and compare to analytic solution

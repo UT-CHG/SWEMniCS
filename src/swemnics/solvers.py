@@ -13,10 +13,12 @@ except ImportError:
 
 from ufl import (
     TestFunction, TrialFunction, FacetNormal, as_matrix,
-    as_vector, as_tensor, dot, inner, grad, dx, ds, dS,
-    jump, avg,sqrt,conditional,gt,div,nabla_div,tr,diag,sign,elem_mult,
-    TestFunctions,cell_avg
+    as_vector, dot, inner, grad, dx, ds, dS,
+    jump, avg,sqrt,conditional,div,elem_mult,
+    TestFunctions
 )
+from ufl.classes import Zero
+
 try:
   from ufl import FiniteElement, VectorElement, MixedElement
   use_basix=False
@@ -24,11 +26,10 @@ except ImportError:
   use_basix=True
   from basix.ufl import element, mixed_element
 
-from ufl.operators import cell_avg
 from mpi4py import MPI
 from petsc4py import PETSc
 import numpy as np
-from swemnics.newton import CustomNewtonProblem, NewtonSolver
+from swemnics.newton import CustomNewtonProblem
 from swemnics.constants import g, R
 try:
   import pyvista
@@ -38,13 +39,13 @@ except ImportError:
   have_pyvista = False
 
 from petsc4py.PETSc import ScalarType
-
+from typing import Literal
 
 class BaseSolver:
     """Defines a base solver class that solves the steady-state shallow-water equations.
     """
 
-    def __init__(self,problem,theta=.5,p_degree=[1,1],p_type="CG",swe_type="full"):
+    def __init__(self,problem,theta=.5,p_degree=[1,1],p_type: Literal["CG", "DG"]="CG",swe_type="full"):
         r"""Iniitalize the solver.
         
         Args: 
@@ -261,7 +262,7 @@ class CGImplicit(BaseSolver):
             
             self.log("Adding DG boundary conditions weakly")
             h, ux, uy = self.problem._get_standard_vars(self.u, 'h')
-            h_ex, ux_ex, uy_ex = self.problem._get_standard_vars(self.u_ex, 'h')
+            h_ex, ux_ex, uy_ex = self.problem._get_standard_vars(self.problem.u_ex, 'h')
             
             #need to add jump terms for DG stability
             boundary_conditions = self.problem.boundary_conditions
@@ -308,6 +309,7 @@ class CGImplicit(BaseSolver):
         """
         if self.problem.solution_var =='h' or self.problem.solution_var =='flux':
             #rewrite for mixed element
+
             self.log("setting initial condition")
             #if the initial condition is specified set this, if not assume level starting condition
             if self.problem.h_init is None:
@@ -323,7 +325,7 @@ class CGImplicit(BaseSolver):
                         self.V.sub(0).element.interpolation_points())
                 )
             if self.problem.vel_init is None:
-                #by default assume 0 velcity everywhere    
+                #by default assume 0 velocity everywhere    
                 self.u_n.sub(1).interpolate(
                     fe.Expression(
                         as_vector([
@@ -333,13 +335,8 @@ class CGImplicit(BaseSolver):
                         self.V.sub(1).element.interpolation_points())
                 )
             else:
-                #by default assume 0 velcity everywhere    
                 self.u_n.sub(1).interpolate(
-                    fe.Expression(
-                        as_vector([
-                            fe.Constant(self.domain, ScalarType(0.00)),
-                            fe.Constant(self.domain, ScalarType(0.00))
-                        ]),
+                    fe.Expression(self.problem.vel_init,                     
                         self.V.sub(1).element.interpolation_points())
                 )
 
@@ -374,15 +371,16 @@ class CGImplicit(BaseSolver):
 
         if self.swe_type=="full":
             self.Fu = Fu = self.problem.make_Fu(self.u)
-            self.Fu_wall = Fu_wall = self.problem.make_Fu_wall(self.u)
+            self.Fu_wall = self.problem.make_Fu_wall(self.u)
             self.u_ex = as_vector((self.problem.u_ex[0],self.u[1],self.u[2]))
-            self.Fu_open= Fu_open = self.problem.make_Fu(self.u_ex)
+            self.Fu_open= self.problem.make_Fu(self.u_ex)
             self.S = self.problem.make_Source(self.u)
         elif self.swe_type=="linear":
-            self.Fu = Fu = self.problem.make_Fu_linearized(self.u)
-            self.Fu_wall = Fu_wall = self.problem.make_Fu_top_wall_linearized(self.u)
-            self.Fu_side_wall = Fu_side_wall = self.problem.make_Fu_side_wall_linearized(self.u)
+            self.Fu = self.problem.make_Fu_linearized(self.u)
+            self.Fu_wall = self.problem.make_Fu_top_wall_linearized(self.u)
+            self.Fu_side_wall  = self.problem.make_Fu_side_wall_linearized(self.u)
             self.S = self.problem.make_Source_linearized(self.u)
+            self.Fu_open = Zero((3, 2))
         else:
             raise Exception("Sorry, swe_type must either be linear or full, not %s" %self.swe_type)
 
@@ -392,7 +390,7 @@ class CGImplicit(BaseSolver):
         self.theta1 = theta1 = fe.Constant(self.domain, PETSc.ScalarType(theta))
         
         #start adding to residual
-        self.F = -inner(Fu,grad(self.p))*dx
+        self.F = -inner(self.Fu,grad(self.p))*dx
         self.add_bcs_to_weak_form()
 
         self.dt = self.problem.dt
