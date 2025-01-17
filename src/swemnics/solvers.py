@@ -663,6 +663,7 @@ class CGImplicit(BaseSolver):
 
     def init_stations(self, points):
         domain = self.problem.mesh
+        points = np.asarray(points, dtype=domain.geometry.x.dtype).reshape(-1, 3)
         # reads in recording stations and outputs points on each processor
         try:
             # 060 old version
@@ -678,7 +679,10 @@ class CGImplicit(BaseSolver):
             cell_candidates = geometry.compute_collisions(bb_tree, points)
         except:
             # 080
-            cell_candidates = geometry.compute_collisions_points(bb_tree, points)
+            cell_candidates = geometry.compute_collisions_points(
+                bb_tree,
+                points,
+            )
         # Choose one of the cells that contains the point
         colliding_cells = geometry.compute_colliding_cells(
             domain, cell_candidates, points
