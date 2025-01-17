@@ -12,7 +12,7 @@ on:
       - main
   schedule:
     # '*' is a special character in YAML, so string must be quoted
-    - cron: "0 8 * * *" 
+    - cron: "0 8 * * *"
 jobs:
   examples:
     runs-on: ubuntu-latest
@@ -51,7 +51,18 @@ jobs:
         run: |
           python3 -m pip install --no-build-isolation --no-cache-dir -e .[examples]
 
-      - name: Run examples
+      - name: Run smooth solution example
         working-directory: examples
         run: |
-          python3 convergence.py dg
+          python3 smooth_analytic_solution.py cg
+          python3 smooth_analytic_solution.py dg
+          python3 smooth_analytic_solution.py supg
+          python3 smooth_analytic_solution.py dgcg
+
+      - name: Run dam-break example
+        working-directory: examples
+        run: |
+          python3 dam_break.py cg
+          python3 dam_break.py dg
+          python3 dam_break.py supg
+          python3 dam_break.py dgcg

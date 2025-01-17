@@ -21,7 +21,6 @@ try:
 except ImportError:
   use_basix=True
   import basix
-  from basix.ufl import element
 
 from petsc4py.PETSc import ScalarType
 from swemnics.boundarycondition import BoundaryCondition,MarkBoundary
@@ -88,7 +87,6 @@ class BaseProblem(abc.ABC):
         self.V = V
         # initialize exact solution
         self.u_ex = fe.Function(V)
-
         #part of rewrite for mixed element
         self.u_ex.sub(0).interpolate(self.h_0)
         self.u_ex.sub(1).interpolate(self.v_0)
