@@ -70,5 +70,5 @@ jobs:
       - name: Run gulf
         working-directory: examples
         run: |
-          python3 gulf.py dg
-          python3 gulf.py supg
+          python3 gulf.py --solver dg
+          python3 gulf.py --solver supg
