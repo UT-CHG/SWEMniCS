@@ -66,3 +66,9 @@ jobs:
           python3 dam_break.py dg
           python3 dam_break.py supg
           python3 dam_break.py dgcg
+
+      - name: Run gulf
+        working-directory: examples
+        run: |
+          python3 gulf.py dg
+          python3 gulf.py supg
