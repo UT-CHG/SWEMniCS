@@ -72,3 +72,10 @@ jobs:
         run: |
           python3 gulf.py --solver dg
           python3 gulf.py --solver supg
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ike_dg
+          path: ./examples/ike_dg_quadratic_dt3600_nprocs1_tide_only

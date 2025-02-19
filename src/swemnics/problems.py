@@ -28,7 +28,6 @@ from dataclasses import dataclass
 from swemnics.constants import g, R, omega, p_water, p_air
 from swemnics.forcing import GriddedForcing
 import scipy
-import h5py
 
 
 @dataclass
@@ -384,7 +383,6 @@ class BaseProblem(abc.ABC):
 
 
         source = g_vec + self.get_friction(u) 
-
         if self.forcing is not None:
             windx, windy, pressure = self.forcing.windx, self.forcing.windy, self.forcing.pressure
             wind_mag = pow(windx*windx + windy*windy, 0.5)
@@ -744,29 +742,34 @@ class IdealizedInlet(TidalProblem):
         # on some cases xdmf has a bug that causes it to use all the memory and crash the system. . .
         # Note this option should be used in serial ONLY
         if self.bypass_xdmf:
-          gdim, shape, degree = 2, "triangle", 1
-          if use_basix:
-            element = basix.ufl.element("Lagrange", shape, degree, shape=(2,))
-          else:
-            cell = ufl.Cell(shape, geometric_dimension=gdim)
-            element = ufl.VectorElement("Lagrange", cell, degree)
-          fname = self.xdmf_file.replace(".xdmf", ".h5")
-          with h5py.File(fname, "r") as ds:
-            geom = ds["Mesh/mesh/geometry"][:]
-            if geom.shape[-1] == 2:
-              new_geom = np.zeros((geom.shape[0], 3))
-              new_geom[:, :2] = geom
-              geom = new_geom
-            topology = ds["Mesh/mesh/topology"][:]
-            self.mesh = mesh.create_mesh(MPI.COMM_WORLD, topology, geom, ufl.Mesh(element))
+            gdim, shape, degree = 2, "triangle", 1
+            if use_basix:
+                element = basix.ufl.element("Lagrange", shape, degree, shape=(2,))
+            else:
+                cell = ufl.Cell(shape, geometric_dimension=gdim)
+                element = ufl.VectorElement("Lagrange", cell, degree)
+            fname = self.xdmf_file.replace(".xdmf", ".h5")
+            try:
+                import h5py
+            
+                with h5py.File(fname, "r") as ds:
+                    geom = ds["Mesh/mesh/geometry"][:]
+                    if geom.shape[-1] == 2:
+                        new_geom = np.zeros((geom.shape[0], 3))
+                        new_geom[:, :2] = geom
+                        geom = new_geom
+                    topology = ds["Mesh/mesh/topology"][:]
+                    self.mesh = mesh.create_mesh(MPI.COMM_WORLD, topology, geom, ufl.Mesh(element))
+            except ModuleNotFoundError:
+                raise ModuleNotFoundError("h5py is required to read the h5 file")
         else:
-          #read in xdmf file for mesh
-          encoding = io.XDMFFile.Encoding.HDF5
-          with io.XDMFFile(MPI.COMM_WORLD, self.xdmf_file, "r", encoding=encoding) as file:
-            self.mesh = file.read_mesh()
+            #read in xdmf file for mesh
+            encoding = io.XDMFFile.Encoding.HDF5
+            with io.XDMFFile(MPI.COMM_WORLD, self.xdmf_file, "r", encoding=encoding) as file:
+                self.mesh = file.read_mesh()
 
-        self.boundaries = [(1, lambda x: np.isclose(x[1], 0)),
-            (2, lambda x: np.logical_not(np.isclose(x[1],0)) | np.logical_and(np.isclose(x[1],0),np.isclose(x[0],0)) |  np.logical_and(np.isclose(x[1],0),np.isclose(x[0],50000))  )]
+            self.boundaries = [(1, lambda x: np.isclose(x[1], 0)),
+                (2, lambda x: np.logical_not(np.isclose(x[1],0)) | np.logical_and(np.isclose(x[1],0),np.isclose(x[0],0)) |  np.logical_and(np.isclose(x[1],0),np.isclose(x[0],50000))  )]
 
     def create_bathymetry(self,V):
         h_b = fe.Function(V.sub(0).collapse()[0])        
