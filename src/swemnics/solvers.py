@@ -380,34 +380,25 @@ class CGImplicit(BaseSolver):
                 # need to add jump terms for DG stability
                 boundary_conditions = self.problem.boundary_conditions
                 ds_exterior = self.problem.ds
-                # needed for velocity computations
-                vel = as_vector((ux, uy))
-                un = dot(vel, n)
-                eps = 1e-16
-                # vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
-                vnorm = conditional(dot(vel, vel) > eps, sqrt(dot(vel, vel)), 0.0)
-                # needed for jump calculation on wall
-                jump_Q_wall = as_vector((0, 2 * un * n[0], 2 * un * n[1]))
-                C_wall = vnorm + sqrt(g * h_b)
-                # velocity has flipped sign in normal direction
-                u_wall = as_vector(
-                    (
-                        self.u[0],
-                        self.u[1] * n[1] * n[1]
-                        - self.u[1] * n[0] * n[0]
-                        - 2 * self.u[2] * n[0] * n[1],
-                        self.u[2] * n[0] * n[0]
-                        - self.u[2] * n[1] * n[1]
-                        - 2 * self.u[1] * n[0] * n[1],
-                    )
-                )
+
+                #needed for velocity computations
+                vel = as_vector((ux,uy))
+                un = dot(vel,n)
+                eps=1e-16
+                #vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
+                vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),0.0)
+                #needed for jump calculation on wall
+                jump_Q_wall = as_vector((0,2*un*n[0], 2*un*n[1]))
+                C_wall =  sqrt(g*h_b)
+                #velocity has flipped sign in normal direction
+                u_wall = as_vector((self.u[0], self.u[1]*n[1]*n[1] - self.u[1]*n[0]*n[0] - 2*self.u[2]*n[0]*n[1], self.u[2]*n[0]*n[0] - self.u[2]*n[1]*n[1] - 2*self.u[1]*n[0]*n[1]  ))
                 Fu_wall_ext = self.problem.make_Fu_linearized(u_wall)
-                # needed for jump calculation on open
-                jump_Q_open = as_vector((h - h_ex, 0, 0))
-                C_open = vnorm + sqrt(g * h_b)
-                # h_ex_plus = conditional(h_ex > eps/2 , h_ex, eps)
-                # C_open = conditional( (vnorm + sqrt(g*h) ) > (vnorm + sqrt(g*h_ex_plus) ), (vnorm + sqrt(g*h)) ,  (vnorm+ sqrt(g*h_ex_plus)) )
-                # loop throught boundary conditions to see if there is any wall conditions
+                #needed for jump calculation on open
+                jump_Q_open = as_vector((h - h_ex, ux-ux_ex, uy-uy_ex))
+                C_open = sqrt(g*h_b)
+                #h_ex_plus = conditional(h_ex > eps/2 , h_ex, eps)
+                #C_open = conditional( (vnorm + sqrt(g*h) ) > (vnorm + sqrt(g*h_ex_plus) ), (vnorm + sqrt(g*h)) ,  (vnorm+ sqrt(g*h_ex_plus)) ) 
+                #loop throught boundary conditions to see if there is any wall conditions
                 for condition in boundary_conditions:
                     if condition.type == "Open":
                         self.F += dot(
@@ -985,12 +976,9 @@ class DGImplicit(CGImplicit):
                 )
             elif self.swe_type == "linear":
                 h_b = self.problem.get_h_b(self.u)
-                C = conditional(
-                    (vnorma + sqrt(g * h_b("+"))) > (vnormb + sqrt(g * h_b("-"))),
-                    (vnorma + sqrt(g * h_b("+"))),
-                    (vnormb + sqrt(g * h_b("-"))),
-                )
-
+                #C = conditional( (vnorma + sqrt(g*h_b('+')) ) > (vnormb + sqrt(g*h_b('-')) ), (vnorma + sqrt(g*h_b('+'))) ,  (vnormb + sqrt(g*h_b('-'))) )
+                C = conditional( (sqrt(g*h_b('+'))) > (sqrt(g*h_b('-'))), (sqrt(g*h_b('+'))) ,  (sqrt(g*h_b('-'))) )  
+            
             if self.problem.spherical:
                 if self.problem.projected:
                     # qustion, even if we are discretizing by primitives should jump be based on flux variable or primitive?
