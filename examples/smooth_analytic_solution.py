@@ -1,5 +1,5 @@
 from swemnics.problems import ConvergenceProblem
-from swemnics import solvers as Solvers
+from swemnics.solvers import get_solver
 import numpy as np
 import matplotlib.pyplot as plt
 from mpi4py import MPI
@@ -80,18 +80,9 @@ def run_experiment(name):
     # create solver object
 
     # cg
+
     theta = 1
-    if name == "cg":
-        solver = Solvers.CGImplicit(prob, theta, swe_type="linear")
-    # supg
-    elif name == "supg":
-        solver = Solvers.SUPGImplicit(prob, theta, p_degree=p_degree, swe_type="linear")
-    # dg
-    elif name == "dg":
-        solver = Solvers.DGImplicit(prob, theta, p_degree=p_degree, swe_type="linear")
-    # dgcg
-    elif name == "dgcg":
-        solver = Solvers.DGCGImplicit(prob, theta, p_degree=p_degree, swe_type="linear")
+    solver = get_solver(name)(prob, theta, p_degree=p_degree, swe_type="linear")
 
     name = name.upper()
     params = {
