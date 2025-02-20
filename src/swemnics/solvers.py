@@ -353,16 +353,20 @@ class CGImplicit(BaseSolver):
                     (h - h_ex, h * ux - h_ex * ux_ex, h * uy - h_ex * uy_ex)
                 )
                 C_open = vnorm + sqrt(g * conditional(h_ex > h, h_ex, h))
+                #if abs(jump_Q_open) 
+
                 # h_ex_plus = conditional(h_ex > eps/2 , h_ex, eps)
                 # C_open = conditional( (vnorm + sqrt(g*h) ) > (vnorm + sqrt(g*h_ex_plus) ), (vnorm + sqrt(g*h)) ,  (vnorm+ sqrt(g*h_ex_plus)) )
                 # loop throught boundary conditions to see if there is any wall conditions
                 for condition in boundary_conditions:
                     if condition.type == "Open":
-                        self.F += dot(
-                            0.5 * dot(self.Fu_open, n) + 0.5 * dot(self.Fu, n), self.p
-                        ) * ds_exterior(condition.marker) + dot(
-                            0.5 * C_open * jump_Q_open, self.p
-                        ) * ds_exterior(condition.marker)
+                        #self.F += dot(
+                        #    0.5 * dot(self.Fu_open, n) + 0.5 * dot(self.Fu_open, n), self.p
+                        #) * ds_exterior(condition.marker) + dot(
+                        #    0.5 * C_open * jump_Q_open, self.p
+                        #) * ds_exterior(condition.marker)
+                        #Fix to this so we can analyze the BCs later
+                        self.F += dot(dot(self.Fu_open, n), self.p) * ds_exterior(condition.marker)
                     if condition.type == "Wall":
                         # self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) + dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
                         self.F += dot(

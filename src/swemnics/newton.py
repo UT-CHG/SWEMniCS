@@ -66,6 +66,7 @@ class CustomNewtonProblem:
 
         self.solver.setTolerances(rtol=solver_parameters.get("ksp_rtol",1e-8), atol=solver_parameters.get("ksp_atol", 1e-9), max_it=solver_parameters.get("ksp_max_it", 1000))
         self.solver.setOperators(self.A)
+        self.solver.setErrorIfNotConverged(True)
         if self.pc_type == 'element_block':
             self.pc = ElementBlockPreconditioner(self.A, obj1.problem.mesh)
         else:
