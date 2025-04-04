@@ -370,17 +370,28 @@ class ADCIRCProblem(Problems.TidalProblem):
         except ImportError:
             print("pyvista not installed. Cannot plot mesh")
 
-    def make_Source(self, u, form="well_balanced"):
+    def make_Source(self, u, form="well_balanced",mom_form="conservative"):
         """Create the forcing terms"""
-        source = super().make_Source(u, form=form)
+        source = super().make_Source(u, form=form, mom_form=mom_form)
         if self.spherical and self.tidal_potential.potential != None:
-            tidal_body_force = ufl.as_vector(
-                (
-                    0,
-                    g * self.S * self.tidal_potential.potential.dx(0),
-                    g * self.tidal_potential.potential.dx(1),
+            if mom_form == "conservative":
+                tidal_body_force = ufl.as_vector(
+                    (
+                        0,
+                        g * self.S * self.tidal_potential.potential.dx(0),
+                        g * self.tidal_potential.potential.dx(1),
+                    )
                 )
-            )
+            elif mom_form == "nonconservative":
+                h, _, _ = self._get_standard_vars(u, form='h')
+                tidal_body_force = ufl.as_vector(
+                    (
+                        0,
+                        g * self.S * self.tidal_potential.potential.dx(0) / h,
+                        g * self.tidal_potential.potential.dx(1) / h,
+                    )
+                )
+
             return source + tidal_body_force
         else:
             return source
