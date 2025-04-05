@@ -890,6 +890,7 @@ class DGImplicit(CGImplicit):
 
         This method may need to be overridden when implementing a solver with trace variables or an alternate approach to boundary conditions.
         """
+        super().add_bcs_to_weak_form()
         boundary_conditions = self.problem.boundary_conditions
         ds_exterior = self.problem.ds
         n = FacetNormal(self.domain)

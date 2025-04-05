@@ -56,9 +56,9 @@ theta=1
 #supg, not working yet with wd
 #solver = Solvers.SUPGImplicit(prob,theta,p_degree=p_degree)
 #dg DGImplicit
-#solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree)
+solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree)
 #dg non conservative
-solver = Solvers.DGImplicitNonConservative(prob,theta,p_degree=p_degree)
+#solver = Solvers.DGImplicitNonConservative(prob,theta,p_degree=p_degree)
 params = {"rtol": rel_toleran, "atol": abs_toleran, "max_it":max_iter, "relaxation_parameter":relax_param, "ksp_type": "gmres", "pc_type": "bjacobi", "ksp_ErrorIfNotConverged": False}#,"pc_factor_mat_solver_type":"mumps"}
 name='Balzano'
 solver.time_loop(solver_parameters=params,stations=stations,plot_every=60,plot_name=name)
