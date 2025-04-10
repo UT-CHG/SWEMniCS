@@ -28,8 +28,8 @@ sol_var = 'h'
 
 prob = WellBalancedProblem(dt=dt,nt=nt,friction_law=fric_law,solution_var=sol_var,spherical=False)
 p_degree = [1,1]
-rel_toleran=1e-5
-abs_toleran=1e-6
+rel_toleran=1e-9
+abs_toleran=1e-10
 max_iter=10
 relax_param = 1.0
 #time series output
@@ -55,7 +55,7 @@ else:
     raise ValueError(f"Unrecognized solver '{name}'")
     
 params = {"rtol": rel_toleran, "atol": abs_toleran, "max_it":max_iter, "relaxation_parameter":relax_param, "ksp_type": "gmres", "pc_type": "ilu"}#,"pc_factor_mat_solver_type":"mumps"}
-solver.time_loop(solver_parameters=params,stations=stations,plot_every=1,plot_name=name+'_wellposed')
+solver.time_loop(solver_parameters=params,stations=stations,plot_every=1,plot_name=name+'_wellbalanced')
 
 #solver.solve()
 #prob.plot_solution(solver.u.sub(0),'Single_time_step')

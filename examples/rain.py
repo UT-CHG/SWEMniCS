@@ -28,8 +28,8 @@ def run_experiment(name, outdir=None, **kwargs):
         spherical=False
     )
     p_degree = [1,1]
-    rel_toleran=1e-5
-    abs_toleran=1e-6
+    rel_toleran=1e-12
+    abs_toleran=1e-13
     max_iter=10
     relax_param = 1.0
     #time series output

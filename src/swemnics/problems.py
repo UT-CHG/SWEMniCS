@@ -938,7 +938,7 @@ class RainForcing:
         self.t = fe.Constant(mesh, ScalarType(0))
 
 
-        self.rain_source = ufl.conditional(self.t <= self.final_t, self.rate,fe.Constant(mesh, ScalarType(0)))
+        self.rain_source = ufl.conditional(self.t <= self.final_t, fe.Constant(mesh, ScalarType(self.rate)), fe.Constant(mesh, ScalarType(0)) )
     def evaluate(self, t):
         """Update the tidal potential
         """
@@ -964,7 +964,7 @@ class RainProblem(TidalProblem):
     alpha: float = 0.00014051891708
     h_b: float = 10.0
     t: float = 0
-    rain_rate: float = 0.0#7.0556*(10**-6)
+    rain_rate: float = 7.0556*(10**-6)
     t_final: float = 86400.0
     nx: int = 25
     ny: int = 4
@@ -985,8 +985,8 @@ class RainProblem(TidalProblem):
     def create_bathymetry(self,V):
         h_b = fe.Function(V.sub(0).collapse()[0])
         #Need to as Namo about this
-        #h_b.interpolate(lambda x: 5 - np.exp(-100*(x[0]-25000)**2) )
-        h_b.interpolate(lambda x: 5 - x[0]*0) 
+        h_b.interpolate(lambda x: 5 - np.exp(-1.0/(100*(self.x1-self.x0))*(x[0]-25000)**2))
+        #h_b.interpolate(lambda x: 5 - x[0]*0) 
         return h_b
 
     def evaluate_tidal_boundary(self,t):

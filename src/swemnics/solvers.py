@@ -843,8 +843,8 @@ class DGImplicit(CGImplicit):
         # Not sure if this is correct or stable yet
         # simplest Lax-Friedrichs flux on F operator
         # see https://fenicsproject.discourse.group/t/lax-friedrichs-flux-for-advection-equation/4647
-
         eps = 1e-16
+        #eps = 1e-8
         n = FacetNormal(self.domain)
         # attempt at full expression from https://docu.ngsolve.org/v6.2.1810/i-tutorials/unit-3.4-simplehyp/shallow2D.html
         # still doesnt work
@@ -907,7 +907,8 @@ class DGImplicit(CGImplicit):
                 # needed for velocity computations
                 vel = as_vector((ux, uy))
                 un = dot(vel, n)
-                eps = 1e-16
+                #eps = 1e-16
+                eps = 1e-8
                 # vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
                 vnorm = conditional(dot(vel, vel) > eps, sqrt(dot(vel, vel)), 0.0)
                 # needed for jump calculation on wall
