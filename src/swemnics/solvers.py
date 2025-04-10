@@ -318,108 +318,6 @@ class CGImplicit(BaseSolver):
                     self.F += dot(dot(self.Fu_wall, n), self.p) * ds_exterior(
                         condition.marker
                     )
-        elif self.p_type == "DG":
-            if self.swe_type == "full":
-                self.log("Adding DG boundary conditions weakly")
-                h, ux, uy = self.problem._get_standard_vars(self.u, "h")
-                h_ex, ux_ex, uy_ex = self.problem._get_standard_vars(self.u_ex, "h")
-                # need to add jump terms for DG stability
-                boundary_conditions = self.problem.boundary_conditions
-                ds_exterior = self.problem.ds
-                # needed for velocity computations
-                vel = as_vector((ux, uy))
-                un = dot(vel, n)
-                eps = 1e-16
-                # vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
-                vnorm = conditional(dot(vel, vel) > eps, sqrt(dot(vel, vel)), 0.0)
-                # needed for jump calculation on wall
-                jump_Q_wall = as_vector((0, 2 * h * un * n[0], 2 * h * un * n[1]))
-                C_wall = vnorm + sqrt(g * h)
-                # velocity has flipped sign in normal direction
-                u_wall = as_vector(
-                    (
-                        self.u[0],
-                        self.u[1] * n[1] * n[1]
-                        - self.u[1] * n[0] * n[0]
-                        - 2 * self.u[2] * n[0] * n[1],
-                        self.u[2] * n[0] * n[0]
-                        - self.u[2] * n[1] * n[1]
-                        - 2 * self.u[1] * n[0] * n[1],
-                    )
-                )
-                Fu_wall_ext = self.problem.make_Fu(u_wall)
-                # needed for jump calculation on open
-                jump_Q_open = as_vector(
-                    (h - h_ex, h * ux - h_ex * ux_ex, h * uy - h_ex * uy_ex)
-                )
-                C_open = vnorm + sqrt(g * conditional(h_ex > h, h_ex, h))
-                #if abs(jump_Q_open) 
-
-                # h_ex_plus = conditional(h_ex > eps/2 , h_ex, eps)
-                # C_open = conditional( (vnorm + sqrt(g*h) ) > (vnorm + sqrt(g*h_ex_plus) ), (vnorm + sqrt(g*h)) ,  (vnorm+ sqrt(g*h_ex_plus)) )
-                # loop throught boundary conditions to see if there is any wall conditions
-                for condition in boundary_conditions:
-                    if condition.type == "Open":
-                        #self.F += dot(
-                        #    0.5 * dot(self.Fu_open, n) + 0.5 * dot(self.Fu_open, n), self.p
-                        #) * ds_exterior(condition.marker) + dot(
-                        #    0.5 * C_open * jump_Q_open, self.p
-                        #) * ds_exterior(condition.marker)
-                        #Fix to this so we can analyze the BCs later
-                        self.F += dot(dot(self.Fu_open, n), self.p) * ds_exterior(condition.marker)
-                    if condition.type == "Wall":
-                        # self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) + dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
-                        self.F += dot(
-                            0.5 * dot(self.Fu, n) + 0.5 * dot(Fu_wall_ext, n), self.p
-                        ) * ds_exterior(condition.marker) + dot(
-                            0.5 * C_wall * jump_Q_wall, self.p
-                        ) * ds_exterior(condition.marker)
-                    # if condition.type == "OF":
-                    #    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
-            elif self.swe_type == "linear":
-                self.log("Adding linearized DG boundary conditions weakly")
-                h, ux, uy = self.problem._get_standard_vars(self.u, "h")
-                h_ex, ux_ex, uy_ex = self.problem._get_standard_vars(self.u_ex, "h")
-                h_b = self.problem.get_h_b(self.u)
-                # need to add jump terms for DG stability
-                boundary_conditions = self.problem.boundary_conditions
-                ds_exterior = self.problem.ds
-
-                #needed for velocity computations
-                vel = as_vector((ux,uy))
-                un = dot(vel,n)
-                eps=1e-16
-                #vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
-                vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),0.0)
-                #needed for jump calculation on wall
-                jump_Q_wall = as_vector((0,2*un*n[0], 2*un*n[1]))
-                C_wall =  sqrt(g*h_b)
-                #velocity has flipped sign in normal direction
-                u_wall = as_vector((self.u[0], self.u[1]*n[1]*n[1] - self.u[1]*n[0]*n[0] - 2*self.u[2]*n[0]*n[1], self.u[2]*n[0]*n[0] - self.u[2]*n[1]*n[1] - 2*self.u[1]*n[0]*n[1]  ))
-                Fu_wall_ext = self.problem.make_Fu_linearized(u_wall)
-                #needed for jump calculation on open
-                jump_Q_open = as_vector((h - h_ex, ux-ux_ex, uy-uy_ex))
-                C_open = sqrt(g*h_b)
-                #h_ex_plus = conditional(h_ex > eps/2 , h_ex, eps)
-                #C_open = conditional( (vnorm + sqrt(g*h) ) > (vnorm + sqrt(g*h_ex_plus) ), (vnorm + sqrt(g*h)) ,  (vnorm+ sqrt(g*h_ex_plus)) ) 
-                #loop throught boundary conditions to see if there is any wall conditions
-                for condition in boundary_conditions:
-                    if condition.type == "Open":
-                        self.F += dot(
-                            0.5 * dot(self.Fu_open, n) + 0.5 * dot(self.Fu, n), self.p
-                        ) * ds_exterior(condition.marker) + dot(
-                            0.5 * C_open * jump_Q_open, self.p
-                        ) * ds_exterior(condition.marker)
-                    if condition.type == "Wall":
-                        # self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) + dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
-                        self.F += dot(
-                            0.5 * dot(self.Fu, n) + 0.5 * dot(Fu_wall_ext, n), self.p
-                        ) * ds_exterior(condition.marker) + dot(
-                            0.5 * C_wall * jump_Q_wall, self.p
-                        ) * ds_exterior(condition.marker)
-                    # if condition.type == "OF":
-                    #    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
-
     def set_initial_condition(self):
         """Set the initial condition.
 
@@ -948,73 +846,374 @@ class DGImplicit(CGImplicit):
 
         eps = 1e-16
         n = FacetNormal(self.domain)
-        # Option 1: use u as the penalizing term, empirically this seems to work best
-        if self.problem.solution_var == "h" or self.problem.solution_var == "eta":
-            # maybe?
-            # C = conditional(sqrt(dot(avg(self.u),avg(self.u))) > eps,sqrt(dot(avg(self.u),avg(self.u))),eps)
+        # attempt at full expression from https://docu.ngsolve.org/v6.2.1810/i-tutorials/unit-3.4-simplehyp/shallow2D.html
+        # still doesnt work
+        h, ux, uy = self.problem._get_standard_vars(self.u, "h")
+        vela = as_vector((ux("+"), uy("+")))
+        velb = as_vector((ux("-"), uy("-")))
 
-            # or this?
-            # vel = as_vector((self.problem.S*self.u[1],self.problem.S*self.u[2]))
-            # C = conditional(sqrt(dot(avg(vel),avg(vel))) > eps,sqrt(dot(avg(vel),avg(vel))),eps)
-            # C = C+sqrt(g*avg(self.problem.S*self.u[0]))
+        # Mark looking at treatment conditionals
+        # vnorma = conditional(dot(vela,vela) > eps,sqrt(dot(vela,vela)),np.sqrt(eps))
+        # vnormb = conditional(dot(velb,velb) > eps,sqrt(dot(velb,velb)),np.sqrt(eps))
+        vnorma = conditional(dot(vela, vela) > eps, sqrt(dot(vela, vela)), 0.0)
+        vnormb = conditional(dot(velb, velb) > eps, sqrt(dot(velb, velb)), 0.0)
 
-            # attempt at full expression from https://docu.ngsolve.org/v6.2.1810/i-tutorials/unit-3.4-simplehyp/shallow2D.html
-            # still doesnt work
-            h, ux, uy = self.problem._get_standard_vars(self.u, "h")
-            vela = as_vector((ux("+"), uy("+")))
-            velb = as_vector((ux("-"), uy("-")))
-
-            # Mark looking at treatment conditionals
-            # vnorma = conditional(dot(vela,vela) > eps,sqrt(dot(vela,vela)),np.sqrt(eps))
-            # vnormb = conditional(dot(velb,velb) > eps,sqrt(dot(velb,velb)),np.sqrt(eps))
-
-            vnorma = conditional(dot(vela, vela) > eps, sqrt(dot(vela, vela)), 0.0)
-            vnormb = conditional(dot(velb, velb) > eps, sqrt(dot(velb, velb)), 0.0)
-
-            # TODO replace conditionals with smoother transition
-            if self.swe_type == "full":
-                C = conditional(
+        # TODO replace conditionals with smoother transition
+        if self.swe_type == "full":
+            C = conditional(
                     (vnorma + sqrt(g * h("+"))) > (vnormb + sqrt(g * h("-"))),
                     (vnorma + sqrt(g * h("+"))),
                     (vnormb + sqrt(g * h("-"))),
-                )
-            elif self.swe_type == "linear":
-                h_b = self.problem.get_h_b(self.u)
-                #C = conditional( (vnorma + sqrt(g*h_b('+')) ) > (vnormb + sqrt(g*h_b('-')) ), (vnorma + sqrt(g*h_b('+'))) ,  (vnormb + sqrt(g*h_b('-'))) )
-                C = conditional( (sqrt(g*h_b('+'))) > (sqrt(g*h_b('-'))), (sqrt(g*h_b('+'))) ,  (sqrt(g*h_b('-'))) )  
+            )
+        elif self.swe_type == "linear":
+            h_b = self.problem.get_h_b(self.u)
+            #C = conditional( (vnorma + sqrt(g*h_b('+')) ) > (vnormb + sqrt(g*h_b('-')) ), (vnorma + sqrt(g*h_b('+'))) ,  (vnormb + sqrt(g*h_b('-'))) )
+            C = conditional( (sqrt(g*h_b('+'))) > (sqrt(g*h_b('-'))), (sqrt(g*h_b('+'))) ,  (sqrt(g*h_b('-'))) )  
             
-            if self.problem.spherical:
-                if self.problem.projected:
-                    # qustion, even if we are discretizing by primitives should jump be based on flux variable or primitive?
-                    # appears both work, using Q now
-                    self.log("spherical projected DG!!")
-                    flux = dot(avg(self.Fu), n("+")) + 0.5 * C * jump(self.Q)
-                else:
-                    flux = dot(avg(self.Fu), n("+")) + 0.5 * C * avg(
+        if self.problem.spherical:
+            if self.problem.projected:
+                # qustion, even if we are discretizing by primitives should jump be based on flux variable or primitive?
+                # appears both work, using Q now
+                self.log("spherical projected DG!!")
+                flux = dot(avg(self.Fu), n("+")) + 0.5 * C * jump(self.Q)
+            else:
+                flux = dot(avg(self.Fu), n("+")) + 0.5 * C * avg(
                         self.problem.S**2 / R
                     ) * jump(self.Q)
-            else:
-                flux = dot(avg(self.Fu), n("+")) + 0.5 * C * jump(self.Q)
-
-        # Option 2
-
-        if self.problem.solution_var == "flux":
-            prop_vel = as_vector((self.u[1] / self.u[0], self.u[2] / self.u[0]))
-
-            C = conditional(
-                sqrt(dot(avg(prop_vel), avg(prop_vel))) > eps,
-                sqrt(dot(avg(prop_vel), avg(prop_vel))),
-                eps,
-            )
-
-            # trying from https://docu.ngsolve.org/v6.2.1810/i-tutorials/unit-3.4-simplehyp/shallow2D.html
-            C = C + sqrt(g * avg(self.u[0]))
-
-            n = FacetNormal(self.domain)
-
-            flux = dot(avg(self.Fu), n("+")) + 0.5 * C * jump(self.u)
+        else:
+            flux = dot(avg(self.Fu), n("+")) + 0.5 * C * jump(self.Q)
 
         self.F += inner(flux, jump(self.p)) * dS
+
+    def add_bcs_to_weak_form(self):
+        """Add boundary integrals to the variational form.
+
+        This method may need to be overridden when implementing a solver with trace variables or an alternate approach to boundary conditions.
+        """
+        super().add_bcs_to_weak_form()
+        boundary_conditions = self.problem.boundary_conditions
+        ds_exterior = self.problem.ds
+        n = FacetNormal(self.domain)
+        # slightly different weak enforcement for DG than CG
+        # work in progress, maybe missing Nitsche terms
+        if self.p_type == "DG":
+            if self.swe_type == "full":
+                self.log("Adding DG boundary conditions weakly")
+                h, ux, uy = self.problem._get_standard_vars(self.u, "h")
+                h_ex, ux_ex, uy_ex = self.problem._get_standard_vars(self.u_ex, "h")
+                # need to add jump terms for DG stability
+                boundary_conditions = self.problem.boundary_conditions
+                ds_exterior = self.problem.ds
+                # needed for velocity computations
+                vel = as_vector((ux, uy))
+                un = dot(vel, n)
+                eps = 1e-16
+                # vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
+                vnorm = conditional(dot(vel, vel) > eps, sqrt(dot(vel, vel)), 0.0)
+                # needed for jump calculation on wall
+                jump_Q_wall = as_vector((0, 2 * h * un * n[0], 2 * h * un * n[1]))
+                C_wall = vnorm + sqrt(g * h)
+                # velocity has flipped sign in normal direction
+                u_wall = as_vector(
+                    (
+                        self.u[0],
+                        self.u[1] * n[1] * n[1]
+                        - self.u[1] * n[0] * n[0]
+                        - 2 * self.u[2] * n[0] * n[1],
+                        self.u[2] * n[0] * n[0]
+                        - self.u[2] * n[1] * n[1]
+                        - 2 * self.u[1] * n[0] * n[1],
+                    )
+                )
+                Fu_wall_ext = self.problem.make_Fu(u_wall)
+                # needed for jump calculation on open
+                jump_Q_open = as_vector(
+                    (h - h_ex, h * ux - h_ex * ux_ex, h * uy - h_ex * uy_ex)
+                )
+                C_open = vnorm + sqrt(g * conditional(h_ex > h, h_ex, h))
+                #if abs(jump_Q_open) 
+
+                # h_ex_plus = conditional(h_ex > eps/2 , h_ex, eps)
+                # C_open = conditional( (vnorm + sqrt(g*h) ) > (vnorm + sqrt(g*h_ex_plus) ), (vnorm + sqrt(g*h)) ,  (vnorm+ sqrt(g*h_ex_plus)) )
+                # loop throught boundary conditions to see if there is any wall conditions
+                for condition in boundary_conditions:
+                    if condition.type == "Open":
+                        #self.F += dot(
+                        #    0.5 * dot(self.Fu_open, n) + 0.5 * dot(self.Fu_open, n), self.p
+                        #) * ds_exterior(condition.marker) + dot(
+                        #    0.5 * C_open * jump_Q_open, self.p
+                        #) * ds_exterior(condition.marker)
+                        #Fix to this so we can analyze the BCs later
+                        self.F += dot(dot(self.Fu_open, n), self.p) * ds_exterior(condition.marker)
+                    if condition.type == "Wall":
+                        # self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) + dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
+                        self.F += dot(
+                            0.5 * dot(self.Fu, n) + 0.5 * dot(Fu_wall_ext, n), self.p
+                        ) * ds_exterior(condition.marker) + dot(
+                            0.5 * C_wall * jump_Q_wall, self.p
+                        ) * ds_exterior(condition.marker)
+                    # if condition.type == "OF":
+                    #    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
+            elif self.swe_type == "linear":
+                self.log("Adding linearized DG boundary conditions weakly")
+                h, ux, uy = self.problem._get_standard_vars(self.u, "h")
+                h_ex, ux_ex, uy_ex = self.problem._get_standard_vars(self.u_ex, "h")
+                h_b = self.problem.get_h_b(self.u)
+                # need to add jump terms for DG stability
+                boundary_conditions = self.problem.boundary_conditions
+                ds_exterior = self.problem.ds
+
+                #needed for velocity computations
+                vel = as_vector((ux,uy))
+                un = dot(vel,n)
+                eps=1e-16
+                #vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
+                vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),0.0)
+                #needed for jump calculation on wall
+                jump_Q_wall = as_vector((0,2*un*n[0], 2*un*n[1]))
+                C_wall =  sqrt(g*h_b)
+                #velocity has flipped sign in normal direction
+                u_wall = as_vector((self.u[0], self.u[1]*n[1]*n[1] - self.u[1]*n[0]*n[0] - 2*self.u[2]*n[0]*n[1], self.u[2]*n[0]*n[0] - self.u[2]*n[1]*n[1] - 2*self.u[1]*n[0]*n[1]  ))
+                Fu_wall_ext = self.problem.make_Fu_linearized(u_wall)
+                #needed for jump calculation on open
+                jump_Q_open = as_vector((h - h_ex, ux-ux_ex, uy-uy_ex))
+                C_open = sqrt(g*h_b)
+                #h_ex_plus = conditional(h_ex > eps/2 , h_ex, eps)
+                #C_open = conditional( (vnorm + sqrt(g*h) ) > (vnorm + sqrt(g*h_ex_plus) ), (vnorm + sqrt(g*h)) ,  (vnorm+ sqrt(g*h_ex_plus)) ) 
+                #loop throught boundary conditions to see if there is any wall conditions
+                for condition in boundary_conditions:
+                    if condition.type == "Open":
+                        self.F += dot(
+                            0.5 * dot(self.Fu_open, n) + 0.5 * dot(self.Fu, n), self.p
+                        ) * ds_exterior(condition.marker) + dot(
+                            0.5 * C_open * jump_Q_open, self.p
+                        ) * ds_exterior(condition.marker)
+                    if condition.type == "Wall":
+                        # self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) + dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
+                        self.F += dot(
+                            0.5 * dot(self.Fu, n) + 0.5 * dot(Fu_wall_ext, n), self.p
+                        ) * ds_exterior(condition.marker) + dot(
+                            0.5 * C_wall * jump_Q_wall, self.p
+                        ) * ds_exterior(condition.marker)
+                    # if condition.type == "OF":
+                    #    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
+
+class DGImplicitNonConservative(DGImplicit):
+    def init_weak_form(self):
+        """Initialize the weak form"""
+        theta = self.theta
+        self.set_initial_condition()
+        # create fluxes
+        self.u_ex = as_vector((self.problem.u_ex[0], self.u[1], self.u[2]))
+        if self.swe_type == "full":
+            print("Creating NONCONSERVATIVE DG FORM\n\n")
+            self.Fu = Fu = self.problem.make_Fu_nonconservative(self.u)
+            self.Fu_wall = self.problem.make_Fu_nonconservative_wall(self.u)
+            self.Fu_open = self.problem.make_Fu_nonconservative(self.u_ex)
+            self.S = self.problem.make_Source(self.u, mom_form='nonconservative')
+        elif self.swe_type == "linear":
+            raise Exception("Sorry, swe_type must be full for DGImplicitNonConservative, not %s" % self.swe_type)
+        else:
+            raise Exception(
+                "Sorry, swe_type must either be linear or full, not %s" % self.swe_type
+            )
+
+        # weak form
+        # specifies time stepping scheme, save it as fe.constant so it is modifiable
+        self.theta1 = theta1 = fe.Constant(self.domain, PETSc.ScalarType(theta))
+
+        # start adding to residual
+        self.F = -inner(self.Fu, grad(self.p)) * dx
+        self.add_bcs_to_weak_form()
+
+        self.dt = self.problem.dt
+
+        # add RHS to residual
+        self.F += inner(self.S, self.p) * dx
+
+        # add contribution from time step
+        h_b = self.problem.h_b
+        if self.swe_type == "full":
+            self.Q = as_vector(self.problem._get_standard_vars(self.u, "h"))
+            self.Qn = as_vector(self.problem._get_standard_vars(self.u_n, "h"))
+            self.Qn_old = as_vector(
+                self.problem._get_standard_vars(self.u_n_old, "h")
+            )
+        elif self.swe_type == "linear":
+            raise Exception(
+                "Sorry, swe_type must either be linear or full, not %s" % self.swe_type
+            )
+        else:
+            raise Exception(
+                "Sorry, swe_type must either be linear or full, not %s" % self.swe_type
+            )
+
+        # BDF2
+        self.dQdt = theta1 * fe.Constant(self.domain, PETSc.ScalarType(1 / self.dt)) * (
+            1.5 * self.Q - 2 * self.Qn + 0.5 * self.Qn_old
+        ) + (1 - theta1) * fe.Constant(self.domain, PETSc.ScalarType(1 / self.dt)) * (
+            self.Q - self.Qn
+        )
+
+        self.F += inner(self.dQdt, self.p) * dx
+
+        # add DG upwinding
+        # Not sure if this is correct or stable yet
+        # simplest Lax-Friedrichs flux on F operator
+        # see https://fenicsproject.discourse.group/t/lax-friedrichs-flux-for-advection-equation/4647
+
+        eps = 1e-16
+        n = FacetNormal(self.domain)
+        # attempt at full expression from https://docu.ngsolve.org/v6.2.1810/i-tutorials/unit-3.4-simplehyp/shallow2D.html
+        # still doesnt work
+        h, ux, uy = self.problem._get_standard_vars(self.u, "h")
+        vela = as_vector((ux("+"), uy("+")))
+        velb = as_vector((ux("-"), uy("-")))
+
+        # Mark looking at treatment conditionals
+        # vnorma = conditional(dot(vela,vela) > eps,sqrt(dot(vela,vela)),np.sqrt(eps))
+        # vnormb = conditional(dot(velb,velb) > eps,sqrt(dot(velb,velb)),np.sqrt(eps))
+        vnorma = conditional(dot(vela, vela) > eps, sqrt(dot(vela, vela)), 0.0)
+        vnormb = conditional(dot(velb, velb) > eps, sqrt(dot(velb, velb)), 0.0)
+
+        # TODO replace conditionals with smoother transition
+        if self.swe_type == "full":
+            C = conditional(
+                    (vnorma + sqrt(g * h("+"))) > (vnormb + sqrt(g * h("-"))),
+                    (vnorma + sqrt(g * h("+"))),
+                    (vnormb + sqrt(g * h("-"))),
+            )
+        elif self.swe_type == "linear":
+            h_b = self.problem.get_h_b(self.u)
+            #C = conditional( (vnorma + sqrt(g*h_b('+')) ) > (vnormb + sqrt(g*h_b('-')) ), (vnorma + sqrt(g*h_b('+'))) ,  (vnormb + sqrt(g*h_b('-'))) )
+            C = conditional( (sqrt(g*h_b('+'))) > (sqrt(g*h_b('-'))), (sqrt(g*h_b('+'))) ,  (sqrt(g*h_b('-'))) )  
+            
+        if self.problem.spherical:
+            if self.problem.projected:
+                # qustion, even if we are discretizing by primitives should jump be based on flux variable or primitive?
+                # appears both work, using Q now
+                self.log("spherical projected DG!!")
+                flux = dot(avg(self.Fu), n("+")) + 0.5 * C * jump(self.Q)
+            else:
+                flux = dot(avg(self.Fu), n("+")) + 0.5 * C * avg(
+                        self.problem.S**2 / R
+                    ) * jump(self.Q)
+        else:
+            flux = dot(avg(self.Fu), n("+")) + 0.5 * C * jump(self.Q)
+
+        self.F += inner(flux, jump(self.p)) * dS
+
+    def add_bcs_to_weak_form(self):
+        """Add boundary integrals to the variational form.
+
+        This method may need to be overridden when implementing a solver with trace variables or an alternate approach to boundary conditions.
+        """
+        boundary_conditions = self.problem.boundary_conditions
+        ds_exterior = self.problem.ds
+        n = FacetNormal(self.domain)
+        # slightly different weak enforcement for DG than CG
+        # work in progress, maybe missing Nitsche terms
+        if self.p_type == "DG":
+            if self.swe_type == "full":
+                self.log("Adding DG boundary conditions weakly")
+                h, ux, uy = self.problem._get_standard_vars(self.u, "h")
+                h_ex, ux_ex, uy_ex = self.problem._get_standard_vars(self.u_ex, "h")
+                # need to add jump terms for DG stability
+                boundary_conditions = self.problem.boundary_conditions
+                ds_exterior = self.problem.ds
+                # needed for velocity computations
+                vel = as_vector((ux, uy))
+                un = dot(vel, n)
+                eps = 1e-16
+                # vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
+                vnorm = conditional(dot(vel, vel) > eps, sqrt(dot(vel, vel)), 0.0)
+                # needed for jump calculation on wall
+                jump_Q_wall = as_vector((0, 2 * un * n[0], 2 * un * n[1]))
+                C_wall = vnorm + sqrt(g * h)
+                # velocity has flipped sign in normal direction
+                u_wall = as_vector(
+                    (
+                        self.u[0],
+                        self.u[1] * n[1] * n[1]
+                        - self.u[1] * n[0] * n[0]
+                        - 2 * self.u[2] * n[0] * n[1],
+                        self.u[2] * n[0] * n[0]
+                        - self.u[2] * n[1] * n[1]
+                        - 2 * self.u[1] * n[0] * n[1],
+                    )
+                )
+                Fu_wall_ext = self.problem.make_Fu(u_wall)
+                # needed for jump calculation on open
+                jump_Q_open = as_vector(
+                    (h - h_ex,  ux -  ux_ex, uy - uy_ex)
+                )
+                C_open = vnorm + sqrt(g * conditional(h_ex > h, h_ex, h))
+                #if abs(jump_Q_open) 
+
+                # h_ex_plus = conditional(h_ex > eps/2 , h_ex, eps)
+                # C_open = conditional( (vnorm + sqrt(g*h) ) > (vnorm + sqrt(g*h_ex_plus) ), (vnorm + sqrt(g*h)) ,  (vnorm+ sqrt(g*h_ex_plus)) )
+                # loop throught boundary conditions to see if there is any wall conditions
+                for condition in boundary_conditions:
+                    if condition.type == "Open":
+                        #self.F += dot(
+                        #    0.5 * dot(self.Fu_open, n) + 0.5 * dot(self.Fu_open, n), self.p
+                        #) * ds_exterior(condition.marker) + dot(
+                        #    0.5 * C_open * jump_Q_open, self.p
+                        #) * ds_exterior(condition.marker)
+                        #Fix to this so we can analyze the BCs later
+                        self.F += dot(dot(self.Fu_open, n), self.p) * ds_exterior(condition.marker)
+                    if condition.type == "Wall":
+                        self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) #+ dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
+                        #self.F += dot(
+                        #    0.5 * dot(self.Fu, n) + 0.5 * dot(Fu_wall_ext, n), self.p
+                        #) * ds_exterior(condition.marker) + dot(
+                        #    0.5 * C_wall * jump_Q_wall, self.p
+                        #) * ds_exterior(condition.marker)
+                    # if condition.type == "OF":
+                    #    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
+            elif self.swe_type == "linear":
+                self.log("Adding linearized DG boundary conditions weakly")
+                h, ux, uy = self.problem._get_standard_vars(self.u, "h")
+                h_ex, ux_ex, uy_ex = self.problem._get_standard_vars(self.u_ex, "h")
+                h_b = self.problem.get_h_b(self.u)
+                # need to add jump terms for DG stability
+                boundary_conditions = self.problem.boundary_conditions
+                ds_exterior = self.problem.ds
+
+                #needed for velocity computations
+                vel = as_vector((ux,uy))
+                un = dot(vel,n)
+                eps=1e-16
+                #vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),np.sqrt(eps))
+                vnorm = conditional(dot(vel,vel) > eps,sqrt(dot(vel,vel)),0.0)
+                #needed for jump calculation on wall
+                jump_Q_wall = as_vector((0,2*un*n[0], 2*un*n[1]))
+                C_wall =  sqrt(g*h_b)
+                #velocity has flipped sign in normal direction
+                u_wall = as_vector((self.u[0], self.u[1]*n[1]*n[1] - self.u[1]*n[0]*n[0] - 2*self.u[2]*n[0]*n[1], self.u[2]*n[0]*n[0] - self.u[2]*n[1]*n[1] - 2*self.u[1]*n[0]*n[1]  ))
+                Fu_wall_ext = self.problem.make_Fu_linearized(u_wall)
+                #needed for jump calculation on open
+                jump_Q_open = as_vector((h - h_ex, ux-ux_ex, uy-uy_ex))
+                C_open = sqrt(g*h_b)
+                #h_ex_plus = conditional(h_ex > eps/2 , h_ex, eps)
+                #C_open = conditional( (vnorm + sqrt(g*h) ) > (vnorm + sqrt(g*h_ex_plus) ), (vnorm + sqrt(g*h)) ,  (vnorm+ sqrt(g*h_ex_plus)) ) 
+                #loop throught boundary conditions to see if there is any wall conditions
+                for condition in boundary_conditions:
+                    if condition.type == "Open":
+                        self.F += dot(
+                            0.5 * dot(self.Fu_open, n) + 0.5 * dot(self.Fu, n), self.p
+                        ) * ds_exterior(condition.marker) + dot(
+                            0.5 * C_open * jump_Q_open, self.p
+                        ) * ds_exterior(condition.marker)
+                    if condition.type == "Wall":
+                        # self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) + dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
+                        self.F += dot(
+                            0.5 * dot(self.Fu, n) + 0.5 * dot(Fu_wall_ext, n), self.p
+                        ) * ds_exterior(condition.marker) + dot(
+                            0.5 * C_wall * jump_Q_wall, self.p
+                        ) * ds_exterior(condition.marker)
+                    # if condition.type == "OF":
+                    #    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
 
 
 class SUPGImplicit(CGImplicit):
