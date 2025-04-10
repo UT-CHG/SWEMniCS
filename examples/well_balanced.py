@@ -38,14 +38,24 @@ stations = np.array([[800.5,500.5,0.0]])
 
 #cg
 theta=1
-#solver = Solvers.CGImplicit(prob,theta)
-#supg
-solver = Solvers.SUPGImplicit(prob,theta,p_degree=p_degree)
-#dg DGImplicit
-#solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree)
-#solver = Solvers.DGCGImplicit(prob,theta, p_degree=p_degree)
+
+name = "dg"
+if name == "cg":
+    solver = Solvers.CGImplicit(prob,theta)
+    #supg
+elif name == "supg":
+    solver = Solvers.SUPGImplicit(prob,theta)
+    #dg DGImplicit
+elif name == "dg":
+    solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree)
+    #dgcg
+elif name == "dgcg":
+    solver = Solvers.DGCGImplicit(prob,theta)
+else:
+    raise ValueError(f"Unrecognized solver '{name}'")
+    
 params = {"rtol": rel_toleran, "atol": abs_toleran, "max_it":max_iter, "relaxation_parameter":relax_param, "ksp_type": "gmres", "pc_type": "ilu"}#,"pc_factor_mat_solver_type":"mumps"}
-solver.time_loop(solver_parameters=params,stations=stations,plot_every=1,plot_name='SUPG_wellposed')
+solver.time_loop(solver_parameters=params,stations=stations,plot_every=1,plot_name=name+'_wellposed')
 
 #solver.solve()
 #prob.plot_solution(solver.u.sub(0),'Single_time_step')

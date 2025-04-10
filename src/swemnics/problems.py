@@ -769,7 +769,7 @@ class TidalProblem(BaseProblem):
         # Define the boundary conditions and pass them to the solver
         boundary_conditions = []
         V_boundary = self.u_ex.function_space
-        self.dof_open = np.array([])
+        self.dof_open = np.array([],dtype=int)
         self.ux_dofs_closed = np.array([])
         self.uy_dofs_closed = np.array([])
         for marker, func in self.boundaries:
@@ -906,7 +906,8 @@ class WellBalancedProblem(TidalProblem):
     alpha: float = 0.00014051891708
     h_b: float = 10.0
     t: float = 0
-
+    nx: int = 12
+    ny: int = 12
     def _create_mesh(self):
         """Initialize the mesh and other variables needed for BC's
         """
@@ -916,16 +917,17 @@ class WellBalancedProblem(TidalProblem):
 
         self.mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[self.x0, self.y0],[self.x1, self.y1]], [self.nx, self.ny])
         #entire boundary walled
-        self.boundaries = [(2, lambda x: np.logical_not(x[0]<-5)) ]
+        #self.boundaries = [(2, lambda x: np.logical_not(x[0]<-5)) ]
+        self.boundaries = [(2, lambda x: np.isclose(x[0],self.x0 ) | np.isclose(x[0],self.x1 )| np.isclose(x[1],self.y1) |  np.isclose(x[1],self.y0))]
 
     def create_bathymetry(self,V):
         h_b = fe.Function(V.sub(0).collapse()[0])
         h_b.interpolate(lambda x: 10 - 5*(np.logical_and(np.logical_and(np.logical_and(x[1]>400, x[1]<600),x[0]>400),x[0]<600))  )
         return h_b
 
-    def evaluate_tidal_boundary(self):
+    def evaluate_tidal_boundary(self,t):
         # no tides
-        return 0
+        return 0*t
 
 
 #a very simple forcing class to apply rainfall
@@ -962,7 +964,7 @@ class RainProblem(TidalProblem):
     alpha: float = 0.00014051891708
     h_b: float = 10.0
     t: float = 0
-    rain_rate: float = 7.0556*(10**-6)
+    rain_rate: float = 0.0#7.0556*(10**-6)
     t_final: float = 86400.0
     nx: int = 25
     ny: int = 4
@@ -975,14 +977,16 @@ class RainProblem(TidalProblem):
         print('nx,ny cells',self.nx,self.ny)
 
         self.mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[self.x0, self.y0],[self.x1, self.y1]], [self.nx, self.ny])
-        self.boundaries = [(2, lambda x: np.logical_not(x[0]<-5)) ]
+        #self.boundaries = [(2, lambda x: np.logical_not(x[0]<-5)) ]
+        self.boundaries = [(2, lambda x: np.isclose(x[0],self.x0 ) | np.isclose(x[0],self.x1 )| np.isclose(x[1],self.y1) |  np.isclose(x[1],self.y0))]
 
         self.rain = RainForcing(self.mesh, self.rain_rate, self.t_final)
 
     def create_bathymetry(self,V):
         h_b = fe.Function(V.sub(0).collapse()[0])
-        h_b.interpolate(lambda x: 5 - np.exp(-100*(x[0]-25000)**2) )
-
+        #Need to as Namo about this
+        #h_b.interpolate(lambda x: 5 - np.exp(-100*(x[0]-25000)**2) )
+        h_b.interpolate(lambda x: 5 - x[0]*0) 
         return h_b
 
     def evaluate_tidal_boundary(self,t):
@@ -1000,9 +1004,10 @@ class RainProblem(TidalProblem):
             ))
         return source - rain_source
     
-    def update_boundary(self):
-        tide = self.evaluate_tidal_boundary(self.t)
-
+    
+    def evaluate_tidal_boundary(self,t):
+        # no tides
+        return 0*t
 
     def advance_time(self):        
         self.t += self.dt
