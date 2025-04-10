@@ -37,7 +37,7 @@ if __name__ == "__main__":
 
     dt = args.dt
     t = 0
-    t_f = 8.75 * 24 * 3600
+    t_f =  3600# 8.75 * 24 * 3600
     nt = int((t_f - t) / dt)
     is_spherical = True
     bath_adjust = 5

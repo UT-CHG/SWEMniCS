@@ -40,9 +40,9 @@ stations = np.array([[800.5,500.5,0.0]])
 theta=1
 #solver = Solvers.CGImplicit(prob,theta)
 #supg
-solver = Solvers.SUPGImplicit(prob,theta,p_degree=p_degree)
+#solver = Solvers.SUPGImplicit(prob,theta,p_degree=p_degree)
 #dg DGImplicit
-#solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree)
+solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree)
 #solver = Solvers.DGCGImplicit(prob,theta, p_degree=p_degree)
 params = {"rtol": rel_toleran, "atol": abs_toleran, "max_it":max_iter, "relaxation_parameter":relax_param, "ksp_type": "gmres", "pc_type": "ilu"}#,"pc_factor_mat_solver_type":"mumps"}
 solver.time_loop(solver_parameters=params,stations=stations,plot_every=1,plot_name='SUPG_wellposed')

@@ -898,6 +898,101 @@ class RainProblem(TidalProblem):
             self.forcing.evaluate(self.t)
         self.rain.evaluate(self.t)
 
+@dataclass
+class RainProblem_incline(TidalProblem):        
+    """ Problem form  ...
+    """
+    dt: float = 600.0
+    nt: int = 288
+    TAU: float = 0.02
+    solution_var: str = 'h'
+    friction_law: str = 'mannings'
+    x0: float = 0
+    x1: float = 200
+    y0: float = 0
+    y1: float =  10
+    mag: float = 0.15
+    alpha: float = 0.00014051891708
+    h_b: float = 10.0
+    t: float = 0
+    rain_rate: float = 7.0556*(10**-6)
+    t_final: float = 86400.0
+    nx: int = 25
+    ny: int = 4
+
+    def _create_mesh(self):
+        """Initialize the mesh and other variables needed for BC's
+        """
+        """for now, hard coded size of mesh
+        """
+        print('nx,ny cells',self.nx,self.ny)
+
+        self.mesh = mesh.create_rectangle(MPI.COMM_WORLD, [[self.x0, self.y0],[self.x1, self.y1]], [self.nx, self.ny])
+        self.boundaries = [(2, lambda x: np.logical_not(x[0]<-5)) ]
+
+        self.rain = RainForcing(self.mesh, self.rain_rate, self.t_final)
+
+    def create_bathymetry(self,V):
+        h_b = fe.Function(V.sub(0).collapse()[0])
+        #h_b.interpolate(lambda x:  -0.5*x[0] + 100 if 0 <= x[0] < 20 else
+        #-3.5*x[0] + 160 if 20 <= x[0] < 40 else
+        #20 if 40 <= x[0] < 80 else
+        #-5*x[0] + 420 if 80 <= x[0] < 82 else
+        #10 if 82 <= x[0] < 100 else
+        #0.25*x[0] - 15 if 100 <= x[0] < 120 else
+        #-0.1875*x[0] + 37.5 if 120 <= x[0] <= 200 else 0*x[0])
+        h_b.interpolate(lambda x: np.select(
+        [
+            (x[0] >= 0) & (x[0] < 20),
+            (x[0] >= 20) & (x[0] < 40),
+            (x[0] >= 40) & (x[0] < 80),
+            (x[0] >= 80) & (x[0] < 82),
+            (x[0] >= 82) & (x[0] < 100),
+            (x[0] >= 100) & (x[0] < 120),
+            (x[0] >= 120) & (x[0] < 200),
+            (x[0] >= 200)
+        ],
+        [
+            -0.5*x[0] + 100,
+            -3.5*x[0] + 160,
+            20,
+            -5*x[0] + 420,
+            10,
+            0.25*x[0] - 15,
+            -0.1875*x[0] + 37.5,
+            0.0*x[0]
+        ],
+        default = 100.0 + 0.0 * x[0]  # Handles values outside the range
+        ))
+        #h_b.interpolate(lambda x: 5 - np.exp(-100*(x[0]-25000)**2) )
+        return h_b
+
+    def evaluate_tidal_boundary(self,t):
+        # no tides
+        return 0
+
+    def make_Source(self, u, form='well_balanced'):
+        """Create the forcing terms"""
+        source = super().make_Source(u, form=form)
+        
+        rain_source = ufl.as_vector((
+                self.rain.rain_source,
+                0,
+                0
+            ))
+        return source - rain_source
+    
+    def update_boundary(self):
+        tide = self.evaluate_tidal_boundary(self.t)
+
+
+    def advance_time(self):        
+        self.t += self.dt
+        self.update_boundary()
+        if self.forcing is not None:
+            self.forcing.evaluate(self.t)
+        self.rain.evaluate(self.t)
+
 
 @dataclass
 class DamProblem(TidalProblem):        
