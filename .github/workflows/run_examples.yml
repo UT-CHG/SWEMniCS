@@ -72,6 +72,11 @@ jobs:
         run: |
           python3 gulf.py --solver dg
 
+      - name: Run tidal
+        working-directory: examples
+        run: |
+          python3 tidal.py
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         if: always()
