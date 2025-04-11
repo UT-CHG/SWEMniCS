@@ -101,10 +101,10 @@ class BaseProblem(abc.ABC):
 
         self.V = V
         # initialize exact solution
-        self.u_ex = fe.Function(V)
+        self.u_bc = fe.Function(V)
         # part of rewrite for mixed element
-        self.u_ex.sub(0).interpolate(self.h_0)
-        self.u_ex.sub(1).interpolate(self.v_0)
+        self.u_bc.sub(0).interpolate(self.h_0)
+        self.u_bc.sub(1).interpolate(self.v_0)
         scalar_V = V.sub(0).collapse()[0]
         if self.spherical:
             # TODO - apply nondimensionalization to spherical cases
@@ -627,7 +627,7 @@ class BaseProblem(abc.ABC):
             (self.V.sub(0), self.V.sub(0).collapse()[0]), open_boundary
         )[0]
 
-        bcs = [fe.dirichletbc(self.u_ex.sub(0), dofs_open)]
+        bcs = [fe.dirichletbc(self.u_bc.sub(0), dofs_open)]
 
         ux_dofs_closed = fe.locate_dofs_geometrical(
             (self.V.sub(1), self.V.sub(1).collapse()[0]), closed_boundary
@@ -636,15 +636,15 @@ class BaseProblem(abc.ABC):
             (self.V.sub(2), self.V.sub(2).collapse()[0]), closed_boundary
         )[0]
         bcs += [
-            fe.dirichletbc(self.u_ex.sub(1), ux_dofs_closed),
-            fe.dirichletbc(self.u_ex.sub(2), uy_dofs_closed),
+            fe.dirichletbc(self.u_bc.sub(1), ux_dofs_closed),
+            fe.dirichletbc(self.u_bc.sub(2), uy_dofs_closed),
         ]
         self._dirichlet_bcs = bcs
 
     def get_rhs(self):
         """Return the RHS (forcing term)"""
 
-        return div(self.make_Fu(self.u_ex))
+        return div(self.make_Fu(self.u_bc))
 
     def l2_norm(self, vec):
         return (fe.assemble_scalar(fe.form(inner(vec, vec) * dx))) ** 0.5
@@ -802,7 +802,7 @@ class TidalProblem(BaseProblem):
         self.ds = Measure("ds", domain=self.mesh, subdomain_data=facet_tag)
         # Define the boundary conditions and pass them to the solver
         boundary_conditions = []
-        V_boundary = self.u_ex.function_space
+        V_boundary = self.u_bc.function_space
         self.dof_open = np.array([], dtype=int)
         self.ux_dofs_closed = np.array([])
         self.uy_dofs_closed = np.array([])
@@ -811,7 +811,7 @@ class TidalProblem(BaseProblem):
                 bc = BoundaryCondition(
                     "Open",
                     marker,
-                    self.u_ex.sub(0),
+                    self.u_bc.sub(0),
                     V_boundary.sub(0),
                     bound_func=func,
                     facet_tag=facet_tag,
@@ -821,7 +821,7 @@ class TidalProblem(BaseProblem):
                 bc = BoundaryCondition(
                     "Wall",
                     marker,
-                    self.u_ex.sub(1),
+                    self.u_bc.sub(1),
                     V_boundary.sub(1),
                     bound_func=func,
                     facet_tag=facet_tag,
@@ -830,7 +830,7 @@ class TidalProblem(BaseProblem):
                 bc = BoundaryCondition(
                     "Open",
                     marker,
-                    self.u_ex.sub(1),
+                    self.u_bc.sub(1),
                     V_boundary.sub(1),
                     bound_func=func,
                     facet_tag=facet_tag,
@@ -840,7 +840,7 @@ class TidalProblem(BaseProblem):
                 bc = BoundaryCondition(
                     "OF",
                     marker,
-                    self.u_ex.sub(1),
+                    self.u_bc.sub(1),
                     V_boundary.sub(1),
                     bound_func=func,
                     facet_tag=facet_tag,
@@ -878,19 +878,20 @@ class TidalProblem(BaseProblem):
         tide = self.evaluate_tidal_boundary(self.t)
 
         if self.solution_var == "eta":
-            self.u_ex.sub(0).x.array[self.dof_open] = tide
+            self.u_bc.sub(0).x.array[self.dof_open] = tide
         else:
             if not hasattr(self, "_hb_boundary"):
-                h_ex = self.u_ex.sub(0)
-                h_ex.interpolate(
+                h_bc = self.u_bc.sub(0)
+                h_bc.interpolate(
                     fe.Expression(
                         self.h_b, self.V.sub(0).element.interpolation_points()
                     )
                 )
-                self._hb_boundary = h_ex.x.array[self.dof_open]
+                self._hb_boundary = h_bc.x.array[self.dof_open]
 
             bc = self._hb_boundary + tide
-            self.u_ex.sub(0).x.array[self.dof_open] = bc
+            self.u_bc.sub(0).x.array[self.dof_open] = bc
+
 
 
 @dataclass
@@ -1175,10 +1176,10 @@ class DamProblem(TidalProblem):
                 res = np.zeros(x.shape[1])
                 return res  #
 
-            self.u_ex.sub(0).interpolate(interp)
+            self.u_bc.sub(0).interpolate(interp)
         else:
-            self.u_ex.sub(0).interpolate(lambda x: 2.0 - self.mag * (x[0] > 500))
-            self.u_ex.sub(1).interpolate(
+            self.u_bc.sub(0).interpolate(lambda x: 2.0 - self.mag * (x[0] > 500))
+            self.u_bc.sub(1).interpolate(
                 fe.Expression(
                     ufl.as_vector(
                         [
