@@ -28,8 +28,8 @@ sol_var = 'h'
 
 prob = WellBalancedProblem(dt=dt,nt=nt,friction_law=fric_law,solution_var=sol_var,spherical=False)
 p_degree = [1,1]
-rel_toleran=1e-5
-abs_toleran=1e-6
+rel_toleran=1e-9
+abs_toleran=1e-10
 max_iter=10
 relax_param = 1.0
 #time series output
@@ -38,14 +38,33 @@ stations = np.array([[800.5,500.5,0.0]])
 
 #cg
 theta=1
+<<<<<<< HEAD
 #solver = Solvers.CGImplicit(prob,theta)
 #supg
 #solver = Solvers.SUPGImplicit(prob,theta,p_degree=p_degree)
 #dg DGImplicit
 solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree)
 #solver = Solvers.DGCGImplicit(prob,theta, p_degree=p_degree)
+=======
+
+name = "dg"
+if name == "cg":
+    solver = Solvers.CGImplicit(prob,theta)
+    #supg
+elif name == "supg":
+    solver = Solvers.SUPGImplicit(prob,theta)
+    #dg DGImplicit
+elif name == "dg":
+    solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree)
+    #dgcg
+elif name == "dgcg":
+    solver = Solvers.DGCGImplicit(prob,theta)
+else:
+    raise ValueError(f"Unrecognized solver '{name}'")
+    
+>>>>>>> b2edb726be93cf558c0e108ca51e8aaaa62e901c
 params = {"rtol": rel_toleran, "atol": abs_toleran, "max_it":max_iter, "relaxation_parameter":relax_param, "ksp_type": "gmres", "pc_type": "ilu"}#,"pc_factor_mat_solver_type":"mumps"}
-solver.time_loop(solver_parameters=params,stations=stations,plot_every=1,plot_name='SUPG_wellposed')
+solver.time_loop(solver_parameters=params,stations=stations,plot_every=1,plot_name=name+'_wellbalanced')
 
 #solver.solve()
 #prob.plot_solution(solver.u.sub(0),'Single_time_step')
