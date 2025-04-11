@@ -1,5 +1,6 @@
 from swemnics.problems import DamProblem
 from swemnics.solvers import get_solver
+from swemnics import FrictionLaw
 import numpy as np
 import matplotlib.pyplot as plt
 from mpi4py import MPI
@@ -26,7 +27,7 @@ def run_experiment(name, outdir=None, **kwargs):
     nt = int(np.ceil(t_f / dt))
     print("Number of time steps", nt)
     # friction law either quadratic or linear
-    fric_law = "none"
+    fric_law = FrictionLaw.none
     # choose solution variable, either h or eta or flux
     sol_var = "h"
 

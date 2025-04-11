@@ -15,7 +15,7 @@ rank = comm.Get_rank()
 
 
 
-dt = 600
+dt = 100
 t = 0
 t_f = 7*24*60*60
 nt = int(np.ceil(t_f/dt))
