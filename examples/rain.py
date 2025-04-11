@@ -15,7 +15,7 @@ def run_experiment(name, outdir=None, **kwargs):
     
     dt = 5.0
     t = 0
-    t_f = 48*60*60
+    t_f = 2*60*60
 
     nt = int(np.ceil(t_f/dt))
     print('nmber of time steps',nt)

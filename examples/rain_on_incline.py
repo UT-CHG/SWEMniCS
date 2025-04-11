@@ -14,8 +14,8 @@ def run_experiment(name, outdir=None, **kwargs):
     nx = 100
     ny = 15
     
-    dt = 10
-    rainfall = 150.0*(10**-6)  
+    dt = 15
+    rainfall = 250.0*(10**-6)  
     t = 0
     t_f = 6*60*60
     alfa = 25.0
@@ -30,12 +30,12 @@ def run_experiment(name, outdir=None, **kwargs):
 
     prob = RainProblem_incline(dt = dt, nt = nt,
         rain_rate = rainfall, spherical=False, nx = nx,
-        ny = ny, wd=wd, wd_alpha = alfa,
+        ny = ny, #wd=wd, wd_alpha = alfa,
         friction_law = fric_law, solution_var = sol_var
     )
     p_degree = [1,1]
-    rel_toleran=1e-5
-    abs_toleran=1e-6
+    rel_toleran=1e-8
+    abs_toleran=1e-9
     max_iter=100
     relax_param = 1.0
     #time series output
@@ -64,7 +64,7 @@ def run_experiment(name, outdir=None, **kwargs):
     
     name = name.upper()
     params = {"rtol": rel_toleran, "atol": abs_toleran, "max_it":max_iter, "relaxation_parameter":relax_param, "ksp_type": "gmres", "pc_type": "ilu"}#,"pc_factor_mat_solver_type":"mumps"}
-    solver.time_loop(solver_parameters=params,stations=stations,plot_every=100,plot_name='rain_incline_test_'+name)
+    solver.time_loop(solver_parameters=params,stations=stations,plot_every=10,plot_name='rain_incline_test_'+name)
     
     #solver.solve()
     #prob.plot_solution(solver.u.sub(0),'Single_time_step')
