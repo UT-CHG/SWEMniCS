@@ -14,3 +14,8 @@ except PackageNotFoundError:  # pragma: no cover
     __version__ = "unknown"
 finally:
     del version, PackageNotFoundError
+
+
+__all__ = ["FrictionLaw", "__version__"]
+
+from .problems import FrictionLaw

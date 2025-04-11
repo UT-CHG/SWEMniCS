@@ -1,5 +1,6 @@
 from swemnics.solvers import get_solver
 from swemnics.adcirc_problem import ADCIRCProblem
+from swemnics import FrictionLaw
 from mpi4py import MPI
 import numpy as np
 from swemnics.constants import R
@@ -30,8 +31,8 @@ if __name__ == "__main__":
     parser.add_argument("--stations", default=None)
     parser.add_argument(
         "--friction",
-        default="quadratic",
-        choices=["linear", "quadratic", "nolibf2", "mannings"],
+        default=FrictionLaw.quadratic,
+        choices=FrictionLaw,
     )
     args = parser.parse_args()
 
@@ -45,7 +46,6 @@ if __name__ == "__main__":
     # The forcing file for Ike cannot be included due to licensing restrictions
     # so this example is purely tidal
     forcing = None
-
     prob = ADCIRCProblem(
         adios_file="data/small_gulf",
         spherical=is_spherical,
