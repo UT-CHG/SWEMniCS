@@ -1024,7 +1024,7 @@ class DGImplicitNonConservative(DGImplicit):
         theta = self.theta
         self.set_initial_condition()
         # create fluxes
-        self.u_bc = as_vector((self.problem.u_bx[0], self.u[1], self.u[2]))
+        self.u_bc = as_vector((self.problem.u_bc[0], self.u[1], self.u[2]))
         if self.swe_type == "full":
             print("Creating NONCONSERVATIVE DG FORM\n\n")
             self.Fu = Fu = self.problem.make_Fu_nonconservative(self.u)
