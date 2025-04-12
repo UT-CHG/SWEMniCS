@@ -335,7 +335,7 @@ class ADCIRCProblem(Problems.TidalProblem):
             BoundaryCondition(
                 "Open",
                 1,
-                self.u_ex.sub(0),
+                self.u_bc.sub(0),
                 self.V.sub(0),
                 bound_func=lambda x: self.boundaries.locate_dofs_geometrical(x.T),
             ),
@@ -370,7 +370,7 @@ class ADCIRCProblem(Problems.TidalProblem):
         except ImportError:
             print("pyvista not installed. Cannot plot mesh")
 
-    def make_Source(self, u, form="well_balanced",mom_form="conservative"):
+    def make_Source(self, u, form="well_balanced", mom_form="conservative"):
         """Create the forcing terms"""
         source = super().make_Source(u, form=form, mom_form=mom_form)
         if self.spherical and self.tidal_potential.potential != None:
@@ -383,7 +383,7 @@ class ADCIRCProblem(Problems.TidalProblem):
                     )
                 )
             elif mom_form == "nonconservative":
-                h, _, _ = self._get_standard_vars(u, form='h')
+                h, _, _ = self._get_standard_vars(u, form="h")
                 tidal_body_force = ufl.as_vector(
                     (
                         0,
