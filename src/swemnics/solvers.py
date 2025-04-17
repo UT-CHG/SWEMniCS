@@ -100,6 +100,8 @@ class BaseSolver:
         p_degree=[1, 1],
         p_type: Literal["CG", "DG"] = "CG",
         swe_type="full",
+        make_tangent=False,
+        make_tangent_every = 1
     ):
         r"""Iniitalize the solver.
 
@@ -123,6 +125,9 @@ class BaseSolver:
         self.names = ["eta", "u", "v"]
         # extra optional parameter added for linearized
         self.swe_type = swe_type
+        self.make_tangent = make_tangent
+        self.make_tangent_every = make_tangent_every
+        self.F_no_dt = None
         self.log("SWE TYPE", self.swe_type)
         if self.wd:
             self.log("Wetting drying activated \n")
@@ -460,6 +465,12 @@ class CGImplicit(BaseSolver):
             self.domain, PETSc.ScalarType(1 / self.dt)
         ) * (u - u_n)
 
+        #if we want to keep track of tangent model do not add this
+        #will this screw up, idk if just pointer or deep copy
+        #lets see
+        if (self.make_tangent):
+            self.F_no_dt = self.F
+
         self.F += inner(self.dQdt, self.p) * dx
 
     def solve_init(
@@ -768,6 +779,12 @@ class CGImplicit(BaseSolver):
             if a % plot_every == 0 and plot_every <= self.problem.nt:
                 self.plot_frame()
 
+            if (self.make_tangent):
+                if (a % self.make_tangent_every == 0):
+                    A_tangent = self.solver.form_tangent_mat()
+                    #how do we return this (it is in the solver object)
+                    #so we could stop every certain number of time steps to get this
+
         # switch to high order time stepping
         self.theta1.value = self.theta
         for a in range(2, self.problem.nt):
@@ -783,6 +800,12 @@ class CGImplicit(BaseSolver):
                 )
             if a % plot_every == 0:
                 self.plot_frame()
+
+            if (self.make_tangent):
+                if (a % self.make_tangent_every == 0):
+                    A_tangent = self.solver.form_tangent_mat()
+                    #how do we return this (it is in the solver object)
+                    #so we could stop every certain number of time steps to get this
 
         if plot_every <= self.problem.nt:
             self.finalize_video()

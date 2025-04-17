@@ -67,11 +67,21 @@ class CustomNewtonProblem:
         self.solver.setTolerances(rtol=solver_parameters.get("ksp_rtol",1e-8), atol=solver_parameters.get("ksp_atol", 1e-9), max_it=solver_parameters.get("ksp_max_it", 1000))
         self.solver.setOperators(self.A)
         self.solver.setErrorIfNotConverged(solver_parameters.get("ksp_ErrorIfNotConverged",True))
+        
         if self.pc_type == 'element_block':
             self.pc = ElementBlockPreconditioner(self.A, obj1.problem.mesh)
         else:
             self.pc = self.solver.getPC()
             self.pc.setType(self.pc_type)
+
+        #for tangent linear model work
+        self.make_tangent = obj1.make_tangent
+        if (self.make_tangent):
+            self.F_no_dt = obj1.F_no_dt
+            #self.tangent_form = fe.form(self.F_no_dt)
+            self.tangent_J = ufl.derivative(self.F_no_dt, self.u)
+            self.tangent_jacobian = fe.form(self.tangent_J)
+            self.A_tangent = petsc.create_matrix(self.tangent_jacobian)
 
 
     def log(self, *msg):
@@ -186,6 +196,11 @@ class CustomNewtonProblem:
         #print(L.getArray())
         #print(L.getArray().size)
         #print(u.x.array[:])
+    def form_tangent_mat(self):
+        self.A_tangent.zeroEntries()
+        petsc.assemble_matrix(self.A_tangent, self.tangent_jacobian, bcs=self.bcs)
+        self.A_tangent.assemble()
+        return self.A_tangent
 
 
 class ElementBlockPreconditioner:
