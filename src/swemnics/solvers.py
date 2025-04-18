@@ -912,6 +912,12 @@ class DGImplicit(CGImplicit):
 
         self.F += inner(flux, jump(self.p)) * dS
 
+        #if we want to keep track of tangent model do not add this
+        #will this screw up, idk if just pointer or deep copy
+        #lets see
+        if (self.make_tangent):
+            self.F_no_dt += inner(flux, jump(self.p)) * dS
+
     def add_bcs_to_weak_form(self):
         """Add boundary integrals to the variational form.
 
@@ -977,9 +983,19 @@ class DGImplicit(CGImplicit):
                         self.F += dot(dot(self.Fu_open, n), self.p) * ds_exterior(
                             condition.marker
                         )
+                        if (self.make_tangent):
+                            self.F_no_dt += dot(dot(self.Fu_open, n), self.p) * ds_exterior(
+                            condition.marker
+                            )
                     if condition.type == "Wall":
                         # self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) + dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
                         self.F += dot(
+                            0.5 * dot(self.Fu, n) + 0.5 * dot(Fu_wall_ext, n), self.p
+                        ) * ds_exterior(condition.marker) + dot(
+                            0.5 * C_wall * jump_Q_wall, self.p
+                        ) * ds_exterior(condition.marker)
+                        if (self.make_tangent):
+                            self.F_no_dt += dot(
                             0.5 * dot(self.Fu, n) + 0.5 * dot(Fu_wall_ext, n), self.p
                         ) * ds_exterior(condition.marker) + dot(
                             0.5 * C_wall * jump_Q_wall, self.p
@@ -1030,6 +1046,12 @@ class DGImplicit(CGImplicit):
                         ) * ds_exterior(condition.marker) + dot(
                             0.5 * C_open * jump_Q_open, self.p
                         ) * ds_exterior(condition.marker)
+                        if (self.make_tangent):
+                            self.F_no_dt += dot(
+                            0.5 * dot(self.Fu_open, n) + 0.5 * dot(self.Fu, n), self.p
+                        ) * ds_exterior(condition.marker) + dot(
+                            0.5 * C_open * jump_Q_open, self.p
+                        ) * ds_exterior(condition.marker)
                     if condition.type == "Wall":
                         # self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) + dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
                         self.F += dot(
@@ -1037,6 +1059,13 @@ class DGImplicit(CGImplicit):
                         ) * ds_exterior(condition.marker) + dot(
                             0.5 * C_wall * jump_Q_wall, self.p
                         ) * ds_exterior(condition.marker)
+                        if (self.make_tangent):
+                            self.F_no_dt += dot(
+                            0.5 * dot(self.Fu, n) + 0.5 * dot(Fu_wall_ext, n), self.p
+                        ) * ds_exterior(condition.marker) + dot(
+                            0.5 * C_wall * jump_Q_wall, self.p
+                        ) * ds_exterior(condition.marker)
+
                     # if condition.type == "OF":
                     #    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
 
@@ -1544,6 +1573,10 @@ class SUPGImplicit(CGImplicit):
             self.F += (
                 inner(dQdt + div(self.Fu) + self.S, (T1 * temp_x + T2 * temp_y)) * dx
             )
+            if (self.make_tangent):
+                self.F_no_dt += (
+                inner(dQdt + div(self.Fu) + self.S, (T1 * temp_x + T2 * temp_y)) * dx
+            )
             # attempt adding interior penalty
             # still may need work, but appears to help stability in channel case
             #####################################################################
@@ -1565,8 +1598,24 @@ class SUPGImplicit(CGImplicit):
                     )
                     * dx
                 )
+                if (self.make_tangent):
+                    self.F_no_dt += (
+                    inner(
+                        dQ_ncdt + T1 * self.u.dx(0) + T2 * self.u.dx(1) + S_nc,
+                        T1 * temp_x + T2 * temp_y,
+                    )
+                    * dx
+                )
             else:
                 self.F += (
+                    inner(
+                        dQ_ncdt + T1 * self.u.dx(0) + T2 * self.u.dx(1) + S_nc,
+                        (T1 * temp_x + T2 * temp_y),
+                    )
+                    * dx
+                )
+                if (self.make_tangent):
+                    self.F_no_dt += (
                     inner(
                         dQ_ncdt + T1 * self.u.dx(0) + T2 * self.u.dx(1) + S_nc,
                         (T1 * temp_x + T2 * temp_y),
