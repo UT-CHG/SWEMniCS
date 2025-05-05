@@ -319,10 +319,20 @@ class CGImplicit(BaseSolver):
                     self.F += dot(dot(self.Fu_open, n), self.p) * ds_exterior(
                         condition.marker
                     )
+                    if (self.make_tangent):
+                        self.F_no_dt += dot(dot(self.Fu_open, n), self.p) * ds_exterior(
+                        condition.marker
+                    )
                 if condition.type == "Wall":
                     self.F += dot(dot(self.Fu_wall, n), self.p) * ds_exterior(
                         condition.marker
                     )
+                    if (self.make_tangent):
+                        self.F_no_dt += dot(dot(self.Fu_wall, n), self.p) * ds_exterior(
+                        condition.marker
+                    )
+
+
 
     def set_initial_condition(self):
         """Set the initial condition.
@@ -426,7 +436,7 @@ class CGImplicit(BaseSolver):
 
         # start adding to residual
         self.F = -inner(self.Fu, grad(self.p)) * dx
-        self.add_bcs_to_weak_form()
+        
 
         self.dt = self.problem.dt
 
@@ -471,6 +481,7 @@ class CGImplicit(BaseSolver):
         if (self.make_tangent):
             self.F_no_dt = self.F
 
+        self.add_bcs_to_weak_form()
         self.F += inner(self.dQdt, self.p) * dx
 
     def solve_init(
@@ -982,7 +993,7 @@ class DGImplicit(CGImplicit):
                         # Fix to this so we can analyze the BCs later
                         self.F += dot(dot(self.Fu_open, n), self.p) * ds_exterior(
                             condition.marker
-                        )
+                        )  
                         if (self.make_tangent):
                             self.F_no_dt += dot(dot(self.Fu_open, n), self.p) * ds_exterior(
                             condition.marker
