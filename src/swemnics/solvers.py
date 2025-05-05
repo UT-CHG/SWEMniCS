@@ -101,7 +101,8 @@ class BaseSolver:
         p_type: Literal["CG", "DG"] = "CG",
         swe_type="full",
         make_tangent=False,
-        make_tangent_every = 1
+        make_tangent_every = 1,
+        verbose = True
     ):
         r"""Iniitalize the solver.
 
@@ -128,11 +129,16 @@ class BaseSolver:
         self.make_tangent = make_tangent
         self.make_tangent_every = make_tangent_every
         self.F_no_dt = None
-        self.log("SWE TYPE", self.swe_type)
+        self.verbose = verbose
+        if self.verbose:
+            self.log("SWE TYPE", self.swe_type)
+        
         if self.wd:
-            self.log("Wetting drying activated \n")
+            if (self.verbose):
+                self.log("Wetting drying activated \n")
         else:
-            self.log("Wetting drying NOT activated \n")
+            if (self.verbose):
+                self.log("Wetting drying NOT activated \n")
 
         self.init_fields()
         self.init_weak_form()
@@ -312,7 +318,8 @@ class CGImplicit(BaseSolver):
         # slightly different weak enforcement for DG than CG
         # work in progress, maybe missing Nitsche terms
         if self.p_type == "CG":
-            self.log("Adding CG boundary conditions weakly")
+            if self.verbose:
+                self.log("Adding CG boundary conditions weakly")
             # loop throught boundary conditions to see if there is any wall conditions
             for condition in boundary_conditions:
                 if condition.type == "Open":
@@ -342,8 +349,8 @@ class CGImplicit(BaseSolver):
         """
         if self.problem.solution_var == "h" or self.problem.solution_var == "flux":
             # rewrite for mixed element
-
-            self.log("setting initial condition")
+            if self.verbose:
+                self.log("setting initial condition")
             # if the initial condition is specified set this, if not assume level starting condition
             if self.problem.h_init is None:
                 self.u_n.sub(0).interpolate(
@@ -706,16 +713,19 @@ class CGImplicit(BaseSolver):
 
         if not self.problem.t:
             # write bathymetry for first timestep only
-            self.log("Interpolating bathymetry")
+            if self.verbose:
+                self.log("Interpolating bathymetry")
             self.bathy_plot.interpolate(
                 fe.Expression(
                     self.problem.h_b, self.V_scalar.element.interpolation_points()
                 )
             )
-            self.log("Writing bathymetry")
+            if self.verbose:
+                self.log("Writing bathymetry")
             # self.xdmf.write_function(self.bathy_plot, self.problem.t)
             self.bathy_writer.write(self.problem.t)
-            self.log("Wrote bathymetry")
+            if self.verbose:
+                self.log("Wrote bathymetry")
 
     def plot_frame_2(self):
         # takes a function and plots as
@@ -745,7 +755,8 @@ class CGImplicit(BaseSolver):
         plot_name="debug_tide",
         u_0=None,
     ):
-        self.log("calling time loop")
+        if self.verbose:
+            self.log("calling time loop")
         self.points_on_proc = local_points = self.init_stations(stations)
         self.station_data = np.zeros((self.problem.nt + 1, local_points.shape[0], 3))
 
@@ -760,12 +771,13 @@ class CGImplicit(BaseSolver):
         # plot the initial condition
         # Mark commented, this seems to be incorrect
         # self.update_solution()
-
-        self.log("plot every", plot_every)
-        self.log("nt", self.problem.nt)
+        if self.verbose:
+            self.log("plot every", plot_every)
+            self.log("nt", self.problem.nt)
 
         if plot_every <= self.problem.nt:
-            self.log("creating video")
+            if self.verbose:
+                self.log("creating video")
             self.initialize_video(plot_name)
             self.plot_frame()
 
@@ -775,8 +787,9 @@ class CGImplicit(BaseSolver):
         # take first 2 steps with implicit Euler since we dont have enough steps for higher order
         self.theta1.value = 0
         for a in range(min(2, self.problem.nt)):
-            self.log("Time Step Number", a, "Out of", self.problem.nt)
-            self.log(a / self.problem.nt * 100, "% Complete")
+            if self.verbose:
+                self.log("Time Step Number", a, "Out of", self.problem.nt)
+                self.log(a / self.problem.nt * 100, "% Complete")
             self.update_solution()
             # working version here
             self.solve_timestep(solver)
@@ -799,8 +812,9 @@ class CGImplicit(BaseSolver):
         # switch to high order time stepping
         self.theta1.value = self.theta
         for a in range(2, self.problem.nt):
-            self.log("Time Step Number", a, "Out of", self.problem.nt)
-            self.log(a / self.problem.nt * 100, "% Complete")
+            if self.verbose:
+                self.log("Time Step Number", a, "Out of", self.problem.nt)
+                self.log(a / self.problem.nt * 100, "% Complete")
             self.update_solution()
             # working version
             self.solve_timestep(solver)
@@ -912,7 +926,8 @@ class DGImplicit(CGImplicit):
             if self.problem.projected:
                 # qustion, even if we are discretizing by primitives should jump be based on flux variable or primitive?
                 # appears both work, using Q now
-                self.log("spherical projected DG!!")
+                if self.verbose:
+                    self.log("spherical projected DG!!")
                 flux = dot(avg(self.Fu), n("+")) + 0.5 * C * jump(self.Q)
             else:
                 flux = dot(avg(self.Fu), n("+")) + 0.5 * C * avg(
@@ -942,7 +957,8 @@ class DGImplicit(CGImplicit):
         # work in progress, maybe missing Nitsche terms
         if self.p_type == "DG":
             if self.swe_type == "full":
-                self.log("Adding DG boundary conditions weakly")
+                if self.verbose:
+                    self.log("Adding DG boundary conditions weakly")
                 h, ux, uy = self.problem._get_standard_vars(self.u, "h")
                 h_bc, ux_bc, uy_bc = self.problem._get_standard_vars(self.u_bc, "h")
                 # need to add jump terms for DG stability
@@ -1014,7 +1030,8 @@ class DGImplicit(CGImplicit):
                     # if condition.type == "OF":
                     #    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
             elif self.swe_type == "linear":
-                self.log("Adding linearized DG boundary conditions weakly")
+                if self.verbose:
+                    self.log("Adding linearized DG boundary conditions weakly")
                 h, ux, uy = self.problem._get_standard_vars(self.u, "h")
                 h_bc, ux_bc, uy_bc = self.problem._get_standard_vars(self.u_bc, "h")
                 h_b = self.problem.get_h_b(self.u)
@@ -1180,7 +1197,8 @@ class DGImplicitNonConservative(DGImplicit):
             if self.problem.projected:
                 # qustion, even if we are discretizing by primitives should jump be based on flux variable or primitive?
                 # appears both work, using Q now
-                self.log("spherical projected DG!!")
+                if self.verbose:
+                    self.log("spherical projected DG!!")
                 flux = dot(avg(self.Fu), n("+")) + 0.5 * C * jump(self.Q)
             else:
                 flux = dot(avg(self.Fu), n("+")) + 0.5 * C * avg(
@@ -1203,7 +1221,8 @@ class DGImplicitNonConservative(DGImplicit):
         # work in progress, maybe missing Nitsche terms
         if self.p_type == "DG":
             if self.swe_type == "full":
-                self.log("Adding DG boundary conditions weakly")
+                if self.verbose:
+                    self.log("Adding DG boundary conditions weakly")
                 h, ux, uy = self.problem._get_standard_vars(self.u, "h")
                 h_bc, ux_bc, uy_bc = self.problem._get_standard_vars(self.u_bc, "h")
                 # need to add jump terms for DG stability
@@ -1263,7 +1282,8 @@ class DGImplicitNonConservative(DGImplicit):
                     # if condition.type == "OF":
                     #    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
             elif self.swe_type == "linear":
-                self.log("Adding linearized DG boundary conditions weakly")
+                if self.verbose:
+                    self.log("Adding linearized DG boundary conditions weakly")
                 h, ux, uy = self.problem._get_standard_vars(self.u, "h")
                 h_bc, ux_bc, uy_bc = self.problem._get_standard_vars(self.u_bc, "h")
                 h_b = self.problem.get_h_b(self.u)
@@ -1660,7 +1680,8 @@ class DGCGImplicit(DGImplicit):
         # for plotting
         self.V_vel = self.V.sub(1).collapse()[0]
         self.V_scalar = self.V.sub(0).collapse()[0]
-        self.log("V scalar", self.V_scalar)
+        if self.verbose:
+            self.log("V scalar", self.V_scalar)
 
         # split these up
 

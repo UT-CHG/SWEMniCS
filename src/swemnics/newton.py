@@ -32,6 +32,7 @@ class CustomNewtonProblem:
         self.u = obj1.u
         self.F = obj1.F
         self.residual = fe.form(self.F)
+        self.verbose = obj1.verbose
 
         self.J = ufl.derivative(self.F, self.u)
         self.jacobian = fe.form(self.J)
@@ -118,7 +119,8 @@ class CustomNewtonProblem:
             #090
             petsc.set_bc(L, self.bcs, u.x.petsc_vec, 1.0)
             L.ghostUpdate(addv=PETSc.InsertMode.INSERT_VALUES, mode=PETSc.ScatterMode.FORWARD)
-            self.log("Residual norm", L.norm(0))
+            if self.verbose:
+                self.log("Residual norm", L.norm(0))
             # Solve linear problem
             if self.pc_type == 'element_block':
                 #print("A cond num", la.cond(petsc_to_csr(A).todense()))
@@ -148,8 +150,9 @@ class CustomNewtonProblem:
                 #print("solved in ", time.time()-start)
             
             dx.x.scatter_forward()
-            self.log(f"linear solver convergence {solver.getConvergedReason()}" +
-                    f", iterations {solver.getIterationNumber()}, resid norm {solver.getResidualNorm()}")
+            if self.verbose:
+                self.log(f"linear solver convergence {solver.getConvergedReason()}" +
+                        f", iterations {solver.getIterationNumber()}, resid norm {solver.getResidualNorm()}")
             if solver.getConvergedReason() == -9:
                 raise RuntimeError("Linear Solver failed due to nans or infs!!!!")
             # Update u_{i+1} = u_i + delta x_i
@@ -163,7 +166,8 @@ class CustomNewtonProblem:
                 #self.dx_0_norm = dx.vector.norm(0)
                 #090
                 self.dx_0_norm = dx.x.petsc_vec.norm(0)
-                self.log('dx_0 norm,',self.dx_0_norm)
+                if self.verbose:
+                    self.log('dx_0 norm,',self.dx_0_norm)
 
 
             #this is relative but breaks in parallel?
@@ -183,13 +187,14 @@ class CustomNewtonProblem:
             #correction_norm = dx.vector.norm(0)
             #090
             correction_norm = dx.x.petsc_vec.norm(0)
-
-            self.log(f"Netwon Iteration {i}: Correction norm {correction_norm}")
+            if self.verbose:
+                self.log(f"Netwon Iteration {i}: Correction norm {correction_norm}")
             if correction_norm < self.atol:
                 break
             if hasattr(self, 'reduction_it'):
                 if i  and i %self.reduction_it == 0:
-                    self.log("Still haven't converged. Reducing relax param")
+                    if self.verbose:
+                        self.log("Still haven't converged. Reducing relax param")
                     relaxation_parameter /= 2
 
             #print(A.getValuesCSR())
