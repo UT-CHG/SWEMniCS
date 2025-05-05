@@ -39,6 +39,7 @@ from petsc4py import PETSc
 import numpy as np
 from swemnics.newton import CustomNewtonProblem
 from swemnics.constants import g, R
+from scipy.sparse import csr_matrix
 
 try:
     import pyvista
@@ -755,6 +756,7 @@ class CGImplicit(BaseSolver):
         plot_name="debug_tide",
         u_0=None,
     ):
+        h_jacobian = None
         if self.verbose:
             self.log("calling time loop")
         self.points_on_proc = local_points = self.init_stations(stations)
@@ -806,6 +808,9 @@ class CGImplicit(BaseSolver):
             if (self.make_tangent):
                 if (a % self.make_tangent_every == 0):
                     A_tangent = self.solver.form_tangent_mat()
+                    aa = A_tangent.getValuesCSR()
+                    huv_jacobian_array2 = csr_matrix((aa[2], aa[1], aa[0])).toarray()
+                    h_jacobian = huv_jacobian_array2[::3, ::3]  # h jacobian
                     #how do we return this (it is in the solver object)
                     #so we could stop every certain number of time steps to get this
 
@@ -829,6 +834,9 @@ class CGImplicit(BaseSolver):
             if (self.make_tangent):
                 if (a % self.make_tangent_every == 0):
                     A_tangent = self.solver.form_tangent_mat()
+                    aa = A_tangent.getValuesCSR()
+                    huv_jacobian_array2 = csr_matrix((aa[2], aa[1], aa[0])).toarray()
+                    h_jacobian = huv_jacobian_array2[::3, ::3]  # h jacobian
                     #how do we return this (it is in the solver object)
                     #so we could stop every certain number of time steps to get this
 
@@ -849,7 +857,7 @@ class CGImplicit(BaseSolver):
             e0 = self.problem.check_solution(self.u, self.V, self.problem.t)
             print("L2 error at t=", str(self.problem.t), " is ", str(e0))
 
-        return self.u, vals, self.eta_plot
+        return self.u, vals, self.eta_plot, h_jacobian
 
 
 class DGImplicit(CGImplicit):
