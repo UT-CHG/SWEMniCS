@@ -56,7 +56,7 @@ theta=1
 #supg, not working yet with wd
 #solver = Solvers.SUPGImplicit(prob,theta,p_degree=p_degree)
 #dg DGImplicit
-solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree)
+solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree,make_tangent=True)
 #dg non conservative
 #solver = Solvers.DGImplicitNonConservative(prob,theta,p_degree=p_degree)
 params = {"rtol": rel_toleran, "atol": abs_toleran, "max_it":max_iter, "relaxation_parameter":relax_param, "ksp_type": "gmres", "pc_type": "bjacobi", "ksp_ErrorIfNotConverged": False}#,"pc_factor_mat_solver_type":"mumps"}
