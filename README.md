@@ -7,7 +7,7 @@ This package allows for solving the shallow water equations with FEniCSx (0.9.0)
 
 # Description
 
-The primary components of the package are a set of solvers, and a problem set. Example usage for both can be found in the examples folder. Both problems and solvers can be extended to support customized applications and/or numerical methods.
+The primary components of the package are a set of solvers, and a problem set. Example usage for both can be found in the examples folder. Both problems and solvers can be extended to support customized applications and/or numerical methods. Details on numerics can also be found in the [SWEMniCS paper](https://www.nature.com/articles/s44304-024-00036-5) 
 
 # Installation
 
