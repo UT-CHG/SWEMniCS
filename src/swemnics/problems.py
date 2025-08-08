@@ -57,7 +57,7 @@ class BaseProblem(abc.ABC):
     # define separatley for mixed elements
     h_0: callable = lambda x: np.sin(x[0] * np.pi) * np.sin(x[1] * np.pi) + 1.0
     v_0: callable = lambda x: np.vstack([np.ones(x.shape[1]), np.ones(x.shape[1])])
-    TAU: float = 0.0
+    TAU: float = 0.02
     h_b: float = 10.0
     solution_var: str = "eta"
     friction_law: str = "linear"
@@ -73,6 +73,7 @@ class BaseProblem(abc.ABC):
     wd: bool = False
     # wetting-and-drying parameter
     wd_alpha: float = 0.05
+    boundary_flux: float = 0.0
 
     def __post_init__(self):
         """Initialize the mesh and other variables needed for BC's"""
@@ -255,6 +256,42 @@ class BaseProblem(abc.ABC):
                 return as_tensor(components) / R
         else:
             return as_tensor(components)
+    
+    def make_Fu_flux(self, u,flux_val):
+        h, ux, uy = self._get_standard_vars(u, form="h")
+        h_b = self.get_h_b(u)
+        if self.wd:
+            eta, _, _ = self._get_standard_vars(u, form="eta")
+            components = [
+                [flux_val, flux_val],
+                [0.5 * g * (eta * eta + 2 * eta * h_b) + flux_val*ux, flux_val*ux],
+                [flux_val*uy, 0.5 * g * (eta * eta + 2 * eta * h_b) + flux_val*uy],
+            ]
+        else:
+            # for well balanced
+            components = [
+                [flux_val, flux_val],
+                [0.5 * g * h * h - 0.5 * g * h_b * h_b +flux_val*ux, flux_val*ux],
+                [flux_val*uy, 0.5 * g * h * h - 0.5 * g * h_b * h_b + flux_val*uy],
+            ]
+
+        if self.spherical:
+            # add spherical correction factor
+            # Mark messing with things
+            for i in range(len(components)):
+                components[i][0] = components[i][0] * self.S
+            if self.projected:
+                # just write our own
+                # components = [
+                #    [(self.S-1)*h*ux,0],
+                #    [ (self.S-1)*(h*ux*ux)+self.S*0.5*g*h*h, 0],
+                #    [(self.S-1)*h*ux*uy,0.5*g*h*h ]
+                #    ]
+                return as_tensor(components)
+            else:
+                return as_tensor(components) / R
+        else:
+            return as_tensor(components)
 
     def make_Fu_nonconservative(self, u):
         h, ux, uy = self._get_standard_vars(u, form="h")
@@ -342,7 +379,7 @@ class BaseProblem(abc.ABC):
         elif friction_law == "mannings":
             # experimental but 1e-16 seems to be ok
             eps = 1e-8
-            self.TAU_const = 0.02
+            #self.TAU_const = 0.02
             mag_v = conditional(
                 pow(ux * ux + uy * uy, 0.5) < eps, 0, pow(ux * ux + uy * uy, 0.5)
             )
@@ -1421,6 +1458,7 @@ class SlopedBeachProblem(TidalProblem):
     # period is 12 h so 2pi/43200
     alpha: float = 2.0 * np.pi / (12.0 * 60 * 60)
     dramp: float = 2
+    TAU: float = 0.02
 
     def create_bathymetry(self, V):
         """Create bathymetry over a given FunctionSpace"""
@@ -1439,3 +1477,152 @@ class SlopedBeachProblem(TidalProblem):
             * self.mag
             * np.cos(t * self.alpha - phase)
         )
+
+@dataclass
+class FlumeExperiment(TidalProblem):
+    xdmf_file: str = None
+    xdmf_facet_file: str = None
+    h_b_val: float = 7.0/100.0
+    x0: float = 0.0
+    x1: float = 6.0078
+    y0: float = 0.0
+    y1: float = 0.24
+    mag: float = 0.06
+    dramp: float = 0.15
+    alpha: float = 2.0*np.pi/(60*60.)
+    h_b_right_val: float = .0404*2.7478
+    # take m3/s and convert to m2/s by dividing by width of inflow
+    # exp 1: inflow = 5.05 m3/h
+    # exp 2: inflow = 9.01 m3/h
+    # exp 3: inflow = 12.01 m3/h
+    # channel width = .24 m 
+    boundary_flux: float = 12.01/(60*60*.24)
+    """ Test case based on paper: 
+    Towards transient experimental water surfaces: A new benchmark dataset
+    for 2D shallow water solvers"""
+    def _create_mesh(self):
+        # Read in xdmf mesh and xmdf facet mesh
+        with io.XDMFFile(MPI.COMM_WORLD, self.xdmf_file, "r") as xdmf:
+            self.mesh = xdmf.read_mesh(name="Grid")
+            #ct = xdmf.read_meshtags(self.mesh, name="Grid")
+        self.mesh.topology.create_connectivity(self.mesh.topology.dim, self.mesh.topology.dim - 1)
+
+        #with io.XDMFFile(MPI.COMM_WORLD, self.xdmf_facet_file, "r") as xdmf:
+        #    ft = xdmf.read_meshtags(self.mesh, name="Grid")
+        #use ft to create boundaries or instead, we know
+        '''
+        self.boundaries = [
+            (1, lambda x: np.isclose(x[0], self.x1)),
+            (
+                2,
+                lambda x: np.logical_not(
+                    np.logical_or(np.isclose(x[0], self.x1),
+                    np.isclose(x[0],self.x0))
+                )
+                | np.isclose(x[1], self.y1)
+                | np.isclose(x[1], self.y0),
+            ),
+            (4, lambda x: np.isclose(x[1], self.x0)),
+        ]
+        '''
+        self.boundaries = [
+            (1, lambda x: np.isclose(x[0], self.x1)),
+            (
+                2,
+                lambda x: np.logical_not(
+                    np.logical_or(np.isclose(x[0], self.x1),
+                        np.isclose(x[0],self.x0)))
+                | np.isclose(x[1], self.y1)
+                | np.isclose(x[1], self.y0),
+            ),
+            (   3,
+                lambda x: np.isclose(x[0], self.x0),
+            ),
+        ]
+
+    def init_bcs(self):
+        """Initialize the boundary conditions"""
+
+        facet_markers, facet_tag = MarkBoundary(self.mesh, self.boundaries)
+        self.facet_tag = facet_tag
+        # generate a measure with the marked boundaries
+        # save as an attribute to the class
+        self.ds = Measure("ds", domain=self.mesh, subdomain_data=facet_tag)
+        # Define the boundary conditions and pass them to the solver
+        boundary_conditions = []
+        V_boundary = self.u_bc.function_space
+        self.dof_open = np.array([], dtype=int)
+        self.ux_dofs_closed = np.array([])
+        self.uy_dofs_closed = np.array([])
+        for marker, func in self.boundaries:
+            if marker == 1:
+                bc = BoundaryCondition(
+                    "Open",
+                    marker,
+                    self.u_bc.sub(0),
+                    V_boundary.sub(0),
+                    bound_func=func,
+                    facet_tag=facet_tag,
+                )
+                self.dof_open = bc.dofs
+            elif marker == 2 or marker == 4:
+                bc = BoundaryCondition(
+                    "Wall",
+                    marker,
+                    self.u_bc.sub(1),
+                    V_boundary.sub(1),
+                    bound_func=func,
+                    facet_tag=facet_tag,
+                )
+            elif marker == 3:
+                bc = BoundaryCondition(
+                    "Flux",
+                    marker,
+                    self.u_bc.sub(1),
+                    V_boundary.sub(1),
+                    bound_func=func,
+                    facet_tag=facet_tag,
+                )
+
+            boundary_conditions.append(bc)
+
+        self._boundary_conditions = boundary_conditions
+        self._dirichlet_bcs = []  # [bc._bc for bc in self.boundary_conditions if bc.type == "Open"]
+
+    def create_bathymetry(self, V):
+        h_b = fe.Function(V.sub(0).collapse()[0])
+        h_b.interpolate(
+            lambda x: self.h_b_val * (x[0] < 3.26) + (self.h_b_val + .0404 * (x[0] - 3.26)) * (x[0] >= 3.26)
+        )
+        return h_b
+    def evaluate_tidal_boundary(self, t):
+        # hard code a ramp
+        return (
+            -np.tanh(2.0 * t / (86400.0 * self.dramp))
+            * self.mag
+            - self.h_b_right_val
+        )
+    
+    def make_h_init(self, V):
+        self.h_init = fe.Function(V)
+        #want uniform depth to start on this one
+        #self.h_init.interpolate(self.h_b)
+        self.h_init.interpolate(lambda x: self.h_b_val + 0.0*x[0])
+    '''
+    def update_boundary(self):
+        tide = self.h_b_val
+
+        if self.solution_var == "eta":
+            if not hasattr(self, "_hb_boundary"):
+                h_bc = self.u_bc.sub(0)
+                h_bc.interpolate(
+                    fe.Expression(
+                        self.h_b, self.V.sub(0).element.interpolation_points()
+                    )
+                )
+                self._hb_boundary = h_bc.x.array[self.dof_open]
+            bc = tide - self._hb_boundary 
+            self.u_bc.sub(0).x.array[self.dof_open] = bc
+        else:
+            self.u_bc.sub(0).x.array[self.dof_open] = tide
+    '''

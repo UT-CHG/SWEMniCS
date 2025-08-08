@@ -339,7 +339,8 @@ class CGImplicit(BaseSolver):
                         self.F_no_dt += dot(dot(self.Fu_wall, n), self.p) * ds_exterior(
                         condition.marker
                     )
-
+                if condition.type == "Flux":
+                    self.F += dot(dot(self.Fu_flux,n),self.p)*ds_exterior(condition.marker)
 
 
     def set_initial_condition(self):
@@ -427,6 +428,7 @@ class CGImplicit(BaseSolver):
             self.Fu = self.problem.make_Fu(self.u)
             self.Fu_wall = self.problem.make_Fu_wall(self.u)
             self.Fu_open = self.problem.make_Fu(self.u_bc)
+            self.Fu_flux = self.problem.make_Fu_flux(self.u, self.problem.boundary_flux)
             self.S = self.problem.make_Source(self.u)
         elif self.swe_type == "linear":
             self.Fu = self.problem.make_Fu_linearized(self.u)
@@ -1035,6 +1037,10 @@ class DGImplicit(CGImplicit):
                         ) * ds_exterior(condition.marker) + dot(
                             0.5 * C_wall * jump_Q_wall, self.p
                         ) * ds_exterior(condition.marker)
+                    if condition.type == "Flux":
+                        self.F += dot(dot(self.Fu_flux, n), self.p) * ds_exterior(
+                            condition.marker
+                        )
                     # if condition.type == "OF":
                     #    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
             elif self.swe_type == "linear":

@@ -27,7 +27,7 @@ class BoundaryCondition:
             self._dofs = dofs
             self._marker = marker
 
-        elif type == "Wall" or type == "OF":
+        elif type == "Wall" or type == "OF" or type =="Flux":
                 #Since Wall condition is enforced weakly, only the marker contains info
                 self._bc = []
                 self._marker = marker
