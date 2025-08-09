@@ -924,10 +924,12 @@ class TidalProblem(BaseProblem):
                         self.h_b, self.V.sub(0).element.interpolation_points()
                     )
                 )
-                self._hb_boundary = h_bc.x.array[self.dof_open]
-
-            bc = self._hb_boundary + tide
-            self.u_bc.sub(0).x.array[self.dof_open] = bc
+                self._hb_boundary = None
+                if self.dof_open.size != 0:
+                    self._hb_boundary = h_bc.x.array[self.dof_open]
+            if self.dof_open.size != 0:
+                bc = self._hb_boundary + tide
+                self.u_bc.sub(0).x.array[self.dof_open] = bc
 
 
 
@@ -1557,7 +1559,7 @@ class FlumeExperiment(TidalProblem):
         for marker, func in self.boundaries:
             if marker == 1:
                 bc = BoundaryCondition(
-                    "Open",
+                    "OF",
                     marker,
                     self.u_bc.sub(0),
                     V_boundary.sub(0),

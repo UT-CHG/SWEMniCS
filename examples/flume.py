@@ -5,6 +5,12 @@ import matplotlib.pyplot as plt
 from mpi4py import MPI
 import timeit
 
+'''
+Based on case from paper:
+Towards transient experimental water surfaces: A new benchmark dataset
+for 2D shallow water solvers
+'''
+
 start = timeit.default_timer()
 
 
@@ -16,7 +22,7 @@ rank = comm.Get_rank()
 
 dt = 0.1
 t = 0
-t_f = 7.50#24*7
+t_f = 10.0#24*7
 nt = int(np.ceil(t_f/dt))
 mannings_n = 0.01
 print('nmber of time steps',nt)
@@ -26,11 +32,15 @@ fric_law = 'mannings'
 sol_var = 'h'
 L = 6.0078
 y_coord = 0.12
-
-
+# take m3/s and convert to m2/s by dividing by width of inflow
+# exp 1: inflow = 5.05 m3/h
+# exp 2: inflow = 9.01 m3/h
+# exp 3: inflow = 12.01 m3/h
+# channel width = .24 m 
+inflow_rate = 5.05/(60*60*.24)
 prob = FlumeExperiment(dt=dt,nt=nt,friction_law=fric_law,
-						  solution_var=sol_var,wd_alpha=0.01,wd=True,
-						  TAU=mannings_n,
+						  solution_var=sol_var,wd_alpha=0.001,wd=True,
+						  TAU=mannings_n, boundary_flux=inflow_rate,
 						  xdmf_file="data/Flume/mesh.xdmf",
 						  xdmf_facet_file="data/Flume/facet_mesh.xdmf")
 p_degree = [1,1]

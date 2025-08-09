@@ -1041,8 +1041,8 @@ class DGImplicit(CGImplicit):
                         self.F += dot(dot(self.Fu_flux, n), self.p) * ds_exterior(
                             condition.marker
                         )
-                    # if condition.type == "OF":
-                    #    self.F += dot(dot(self.Fu_side_wall, n), self.p)*ds_exterior(condition.marker)
+                    if condition.type == "OF":
+                        self.F += dot(dot(self.Fu, n), self.p)*ds_exterior(condition.marker)
             elif self.swe_type == "linear":
                 if self.verbose:
                     self.log("Adding linearized DG boundary conditions weakly")
