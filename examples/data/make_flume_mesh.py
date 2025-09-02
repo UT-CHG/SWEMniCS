@@ -36,10 +36,10 @@ poly = model.add_polygon(polygon_points, mesh_size=resolution)
 
 # Add points with finer resolution on left side
 points = [
-    model.add_point((0, 0, 0), mesh_size=resolution),
-    model.add_point((L, 0, 0), mesh_size=5 * resolution),
-    model.add_point((L, H, 0), mesh_size=5 * resolution),
-    model.add_point((0, H, 0), mesh_size=resolution),
+    model.add_point((0, 0, 0), mesh_size= 5*resolution),
+    model.add_point((L, 0, 0), mesh_size= 5*resolution),
+    model.add_point((L, H, 0), mesh_size= 5*resolution),
+    model.add_point((0, H, 0), mesh_size= 5*resolution),
 ]
 
 # Add lines between all points creating the rectangle
