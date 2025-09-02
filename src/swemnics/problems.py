@@ -1488,7 +1488,10 @@ class FlumeExperiment(TidalProblem):
     x0: float = 0.0
     x1: float = 6.0078
     y0: float = 0.0
-    y1: float = 0.24
+    #original value
+    #y1: float = 0.24
+    #extended domain
+    y1: float = .08*11.0
     mag: float = 0.06
     dramp: float = 0.15
     alpha: float = 2.0*np.pi/(60*60.)

@@ -30,7 +30,17 @@ print('nmber of time steps',nt)
 fric_law = 'mannings'
 #choose solution variable, either h or eta or flux
 sol_var = 'h'
+cm_to_m = .01
+# width of rectangle
+r_width = 16.3*cm_to_m
+#height of rectangle object
+r_height = 8.0*cm_to_m
 L = 6.0078
+#original expirement value
+#H = 24.0*cm_to_m
+#extended domain
+H = r_height*11.0
+
 y_coord = 0.12
 # take m3/s and convert to m2/s by dividing by width of inflow
 # exp 1: inflow = 5.05 m3/h
@@ -49,8 +59,16 @@ abs_toleran=1e-6
 max_iter=10
 relax_param = 1.0
 #time series output
-nstat = 12
-stations = np.hstack(( np.linspace(0.0,L,nstat),y_coord*np.ones(nstat),np.zeros(nstat)))
+#generating grid points
+npx = 101
+npy = 11
+stations = np.zeros((npx*npy,3))
+just_x = np.linspace(0,L,npx)
+just_y = np.linspace(0,H,npy)
+stations[:,0] = np.tile(just_x,npy)
+stations[:,1] = np.repeat(just_y,npx)
+#nstat = 12
+#stations = np.hstack(( np.linspace(0.0,L,nstat),y_coord*np.ones(nstat),np.zeros(nstat)))
 #create solver object
 
 #cg
