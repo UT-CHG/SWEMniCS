@@ -13,7 +13,7 @@ L = 6.0078
 H = r_height*11.0
 
 #base case
-h_b_val: float = 7.0/100.0
+h_b_val: float = 14.0/100.0
 h_b = lambda x: h_b_val * (x[:,0] < 3.26) + (h_b_val + .0404 * (x[:,0] - 3.26)) * (x[:,0] >= 3.26)
 
 #generating grid points

@@ -1484,7 +1484,7 @@ class SlopedBeachProblem(TidalProblem):
 class FlumeExperiment(TidalProblem):
     xdmf_file: str = None
     xdmf_facet_file: str = None
-    h_b_val: float = 7.0/100.0
+    h_b_val: float = 14.0/100.0
     x0: float = 0.0
     x1: float = 6.0078
     y0: float = 0.0

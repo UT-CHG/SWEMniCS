@@ -20,9 +20,9 @@ rank = comm.Get_rank()
 
 
 
-dt = 0.1
+dt = 0.1/5.0#0.1
 t = 0
-t_f = 10.0#24*7
+t_f = 20.0#10.0#24*7
 nt = int(np.ceil(t_f/dt))
 mannings_n = 0.01
 print('nmber of time steps',nt)
