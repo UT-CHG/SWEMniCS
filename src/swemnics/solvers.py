@@ -103,7 +103,8 @@ class BaseSolver:
         swe_type="full",
         make_tangent=False,
         make_tangent_every = 1,
-        verbose = True
+        verbose = True,
+        get_station_h = False
     ):
         r"""Iniitalize the solver.
 
@@ -131,6 +132,7 @@ class BaseSolver:
         self.make_tangent_every = make_tangent_every
         self.F_no_dt = None
         self.verbose = verbose
+        self.get_station_h = get_station_h
         if self.verbose:
             self.log("SWE TYPE", self.swe_type)
         
@@ -633,7 +635,7 @@ class CGImplicit(BaseSolver):
     def record_stations(self, u_sol, points_on_proc):
         """saves time series at stations into a numpy array"""
         h_values = u_sol.sub(0).eval(points_on_proc, self.cells)
-        if self.problem.solution_var in ["h", "flux"]:
+        if self.problem.solution_var in ["h", "flux"] and not self.get_station_h:
             h_values -= self.station_bathy
         # correct for w/d for nicer plotting
         # h_values = np.maximum(h_values,-self.station_bathy)

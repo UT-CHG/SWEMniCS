@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpi4py import MPI
 import timeit
+import h5py
 
 '''
 Based on case from paper:
@@ -18,11 +19,12 @@ start = timeit.default_timer()
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
-
+#paramterize by input
+h5_file_path = 'my_data'
 
 dt = 0.1/5.0#0.1
 t = 0
-t_f = 20.0#10.0#24*7
+t_f = 20.0#10.0
 nt = int(np.ceil(t_f/dt))
 mannings_n = 0.01
 print('nmber of time steps',nt)
@@ -60,11 +62,17 @@ max_iter=10
 relax_param = 1.0
 #time series output
 #generating grid points
-npx = 101
-npy = 11
+#dont cover whole grid
+#instead do roughly 10d behind, 5d in front
+# 10d is roughly 1.6 m 
+# spacing should be every .01 m which is finest resolution
+npx = 241
+npy = 89
+npoints = npx*npy
+eps = 1e-7
 stations = np.zeros((npx*npy,3))
-just_x = np.linspace(0,L,npx)
-just_y = np.linspace(0,H,npy)
+just_x = np.linspace(1.4,3.8,npx)
+just_y = np.linspace(0+eps,H-eps,npy)
 stations[:,0] = np.tile(just_x,npy)
 stations[:,1] = np.repeat(just_y,npx)
 #nstat = 12
@@ -77,7 +85,7 @@ theta=1
 #supg, not working yet with wd
 #solver = Solvers.SUPGImplicit(prob,theta,p_degree=p_degree)
 #dg DGImplicit
-solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree,make_tangent=False)
+solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree,make_tangent=False, get_station_h=True)
 #dg non conservative
 #solver = Solvers.DGImplicitNonConservative(prob,theta,p_degree=p_degree)
 params = {"rtol": rel_toleran, "atol": abs_toleran, "max_it":max_iter, "relaxation_parameter":relax_param, "ksp_type": "gmres", "pc_type": "bjacobi", "ksp_ErrorIfNotConverged": False}#,"pc_factor_mat_solver_type":"mumps"}
@@ -104,9 +112,43 @@ if rank ==0:
 	plt.xlabel("t(day)")
 	plt.title('WD Tidal Velocity for DG Scheme')
 	plt.savefig("wd_flume_velocity_DG.png")
-	np.savetxt(f"{name}_p1_wse.csv", solver.vals[:,:,0], delimiter=",")
-	np.savetxt(f"{name}_p1_xvel.csv", solver.vals[:,:,1], delimiter=",")
-	np.savetxt(f"{name}_p1_yvel.csv", solver.vals[:,:,2], delimiter=",")
+
+	#save to each solution to h5
+	print(solver.vals.shape)
+	print(stations.shape)
+	with h5py.File(h5_file_path+"_h.h5", 'w') as f:
+    	# Create a dataset named 'my_array_dataset' and store data_array in it
+		# there are gaps in the data
+		temp_arr = np.full((nt+1,npoints),fill_value=np.nan)
+		temp_arr[:,solver.inds] = solver.vals[:,:,0]
+		temp_arr = temp_arr.reshape((nt+1,npy,npx))
+		f.create_dataset('h', data=temp_arr)
+	with h5py.File(h5_file_path+"_u.h5", 'w') as f:
+    	# Create a dataset named 'my_array_dataset' and store data_array in it
+		# there are gaps in the data
+		temp_arr = np.full((nt+1,npoints),fill_value=np.nan)
+		temp_arr[:,solver.inds] = solver.vals[:,:,1]
+		temp_arr = temp_arr.reshape((nt+1,npy,npx))
+		f.create_dataset('u', data=temp_arr)
+		#print(np.argwhere(np.isnan(temp_arr)))
+	with h5py.File(h5_file_path+"_v.h5", 'w') as f:
+    	# Create a dataset named 'my_array_dataset' and store data_array in it
+		# there are gaps in the data
+		temp_arr = np.full((nt+1,npoints),fill_value=np.nan)
+		temp_arr[:,solver.inds] = solver.vals[:,:,2]
+		temp_arr = temp_arr.reshape((nt+1,npy,npx))
+		f.create_dataset('v', data=temp_arr)
+		#print(np.argwhere(np.isnan(temp_arr)))
+	with h5py.File(h5_file_path+"_bathy.h5", "w") as f:
+		temp_arr = np.full(npoints,fill_value=np.nan)
+		temp_arr[solver.inds] = solver.station_bathy.flatten()
+		temp_arr = temp_arr.reshape((npy,npx))
+		f.create_dataset('bathy', data=temp_arr)
+		#print(np.argwhere(np.isnan(temp_arr)))
+
+	#np.savetxt(f"{name}_p1_wse.csv", solver.vals[:,:,0], delimiter=",")
+	#np.savetxt(f"{name}_p1_xvel.csv", solver.vals[:,:,1], delimiter=",")
+	#np.savetxt(f"{name}_p1_yvel.csv", solver.vals[:,:,2], delimiter=",")
 
 #Your statements here
 
