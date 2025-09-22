@@ -74,6 +74,7 @@ class BaseProblem(abc.ABC):
     # wetting-and-drying parameter
     wd_alpha: float = 0.05
     boundary_flux: float = 0.0
+    boundary_flux_func = None
 
     def __post_init__(self):
         """Initialize the mesh and other variables needed for BC's"""
@@ -1593,6 +1594,8 @@ class FlumeExperiment(TidalProblem):
 
         self._boundary_conditions = boundary_conditions
         self._dirichlet_bcs = []  # [bc._bc for bc in self.boundary_conditions if bc.type == "Open"]
+        self.boundary_flux_func = fe.Function(self.V.sub(0).collapse()[0])
+        self.boundary_flux_func.interpolate(lambda x: -self.boundary_flux/((self.y0+self.y1/2.0)**2)*(x[1] - self.y0)*(x[1] - self.y1))
 
     def create_bathymetry(self, V):
         h_b = fe.Function(V.sub(0).collapse()[0])

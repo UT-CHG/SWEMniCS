@@ -430,7 +430,10 @@ class CGImplicit(BaseSolver):
             self.Fu = self.problem.make_Fu(self.u)
             self.Fu_wall = self.problem.make_Fu_wall(self.u)
             self.Fu_open = self.problem.make_Fu(self.u_bc)
-            self.Fu_flux = self.problem.make_Fu_flux(self.u, self.problem.boundary_flux)
+            if self.problem.boundary_flux_func != None:
+                self.Fu_flux = self.problem.make_Fu_flux(self.u, self.problem.boundary_flux_func)
+            else:
+                self.Fu_flux = None
             self.S = self.problem.make_Source(self.u)
         elif self.swe_type == "linear":
             self.Fu = self.problem.make_Fu_linearized(self.u)

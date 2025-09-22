@@ -36,7 +36,7 @@ x_end = 3.8
 #extended domain
 H = r_height*11.0
 
-x = np.linspace(x_start, x_end, nx)
+x = np.linspace(0, L, nx)
 y = np.linspace(0, H, ny)
 X,Y = np.meshgrid(x,y)
 #fix scaling of color map

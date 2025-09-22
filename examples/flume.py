@@ -24,7 +24,7 @@ h5_file_path = 'my_data'
 
 dt = 0.1/5.0#0.1
 t = 0
-t_f = 20.0#10.0
+t_f = 30.0#10.0
 nt = int(np.ceil(t_f/dt))
 mannings_n = 0.01
 print('nmber of time steps',nt)
@@ -44,15 +44,20 @@ L = 6.0078
 H = r_height*11.0
 
 y_coord = 0.12
+#depth on left boundary
+boundary_depth = 28.0/100.0
 # take m3/s and convert to m2/s by dividing by width of inflow
 # exp 1: inflow = 5.05 m3/h
-# exp 2: inflow = 9.01 m3/h
-# exp 3: inflow = 12.01 m3/h
-# channel width = .24 m 
 inflow_rate = 5.05/(60*60*.24)
+# exp 2: inflow = 9.01 m3/h
+#inflow_rate = 9.01/(60*60*.24)
+# exp 3: inflow = 12.01 m3/h
+#inflow_rate = 12.01/(60*60*.24)
+# channel width = .24 m 
+
 prob = FlumeExperiment(dt=dt,nt=nt,friction_law=fric_law,
 						  solution_var=sol_var,wd_alpha=0.001,wd=True,
-						  TAU=mannings_n, boundary_flux=inflow_rate,
+						  TAU=mannings_n, boundary_flux=inflow_rate, h_b_val=boundary_depth,
 						  xdmf_file="data/Flume/mesh.xdmf",
 						  xdmf_facet_file="data/Flume/facet_mesh.xdmf")
 p_degree = [1,1]
@@ -66,12 +71,12 @@ relax_param = 1.0
 #instead do roughly 10d behind, 5d in front
 # 10d is roughly 1.6 m 
 # spacing should be every .01 m which is finest resolution
-npx = 241
+npx = 601
 npy = 89
 npoints = npx*npy
 eps = 1e-7
 stations = np.zeros((npx*npy,3))
-just_x = np.linspace(1.4,3.8,npx)
+just_x = np.linspace(0.0+eps,6.00,npx)
 just_y = np.linspace(0+eps,H-eps,npy)
 stations[:,0] = np.tile(just_x,npy)
 stations[:,1] = np.repeat(just_y,npx)
@@ -90,7 +95,7 @@ solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree,make_tangent=False, get
 #solver = Solvers.DGImplicitNonConservative(prob,theta,p_degree=p_degree)
 params = {"rtol": rel_toleran, "atol": abs_toleran, "max_it":max_iter, "relaxation_parameter":relax_param, "ksp_type": "gmres", "pc_type": "bjacobi", "ksp_ErrorIfNotConverged": False}#,"pc_factor_mat_solver_type":"mumps"}
 name='Flume'
-solver.time_loop(solver_parameters=params,stations=stations,plot_every=1,plot_name=name)
+solver.time_loop(solver_parameters=params,stations=stations,plot_every=10,plot_name=name)
 
 #solver.solve()
 #prob.plot_solution(solver.u.sub(0),'Single_time_step')
