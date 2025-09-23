@@ -47,13 +47,14 @@ y_coord = 0.12
 #depth on left boundary
 boundary_depth = 28.0/100.0
 # take m3/s and convert to m2/s by dividing by width of inflow
-# exp 1: inflow = 5.05 m3/h
-inflow_rate = 5.05/(60*60*.24)
-# exp 2: inflow = 9.01 m3/h
-#inflow_rate = 9.01/(60*60*.24)
-# exp 3: inflow = 12.01 m3/h
-#inflow_rate = 12.01/(60*60*.24)
 # channel width = .24 m 
+# exp 1: inflow = 5.05 m3/h
+#inflow_rate = 5.05/(60*60*H)
+# exp 2: inflow = 9.01 m3/h
+#inflow_rate = 9.01/(60*60*H)
+# exp 3: inflow = 12.01 m3/h
+inflow_rate = 12.01/(60*60*H)
+
 
 prob = FlumeExperiment(dt=dt,nt=nt,friction_law=fric_law,
 						  solution_var=sol_var,wd_alpha=0.001,wd=True,
