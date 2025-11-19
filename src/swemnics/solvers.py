@@ -31,13 +31,15 @@ from ufl import (
     div,
     elem_mult,
     TestFunctions,
+    TrialFunction,
+    derivative
 )
 
 
 from mpi4py import MPI
 from petsc4py import PETSc
 import numpy as np
-from swemnics.newton import CustomNewtonProblem
+from swemnics.newton import CustomNewtonProblem, CustomNewtonProblem2
 from swemnics.constants import g, R
 from scipy.sparse import csr_matrix
 
@@ -912,26 +914,26 @@ class DGImplicit(CGImplicit):
         # attempt at full expression from https://docu.ngsolve.org/v6.2.1810/i-tutorials/unit-3.4-simplehyp/shallow2D.html
         # still doesnt work
         h, ux, uy = self.problem._get_standard_vars(self.u, "h")
-        vela = as_vector((ux("+"), uy("+")))
-        velb = as_vector((ux("-"), uy("-")))
+        self.vela = as_vector((ux("+"), uy("+")))
+        self.velb = as_vector((ux("-"), uy("-")))
 
         # Mark looking at treatment conditionals
         # vnorma = conditional(dot(vela,vela) > eps,sqrt(dot(vela,vela)),np.sqrt(eps))
         # vnormb = conditional(dot(velb,velb) > eps,sqrt(dot(velb,velb)),np.sqrt(eps))
-        vnorma = conditional(dot(vela, vela) > eps, sqrt(dot(vela, vela)), 0.0)
-        vnormb = conditional(dot(velb, velb) > eps, sqrt(dot(velb, velb)), 0.0)
+        self.vnorma = conditional(dot(self.vela, self.vela) > eps, sqrt(dot(self.vela, self.vela)), 0.0)
+        self.vnormb = conditional(dot(self.velb, self.velb) > eps, sqrt(dot(self.velb, self.velb)), 0.0)
 
         # TODO replace conditionals with smoother transition
         if self.swe_type == "full":
-            C = conditional(
-                (vnorma + sqrt(g * h("+"))) > (vnormb + sqrt(g * h("-"))),
-                (vnorma + sqrt(g * h("+"))),
-                (vnormb + sqrt(g * h("-"))),
+            self.C = conditional(
+                (self.vnorma + sqrt(g * h("+"))) > (self.vnormb + sqrt(g * h("-"))),
+                (self.vnorma + sqrt(g * h("+"))),
+                (self.vnormb + sqrt(g * h("-"))),
             )
         elif self.swe_type == "linear":
             h_b = self.problem.get_h_b(self.u)
             # C = conditional( (vnorma + sqrt(g*h_b('+')) ) > (vnormb + sqrt(g*h_b('-')) ), (vnorma + sqrt(g*h_b('+'))) ,  (vnormb + sqrt(g*h_b('-'))) )
-            C = conditional(
+            self.C = conditional(
                 (sqrt(g * h_b("+"))) > (sqrt(g * h_b("-"))),
                 (sqrt(g * h_b("+"))),
                 (sqrt(g * h_b("-"))),
@@ -943,21 +945,21 @@ class DGImplicit(CGImplicit):
                 # appears both work, using Q now
                 if self.verbose:
                     self.log("spherical projected DG!!")
-                flux = dot(avg(self.Fu), n("+")) + 0.5 * C * jump(self.Q)
+                self.flux = dot(avg(self.Fu), n("+")) + 0.5 * self.C * jump(self.Q)
             else:
-                flux = dot(avg(self.Fu), n("+")) + 0.5 * C * avg(
+                self.flux = dot(avg(self.Fu), n("+")) + 0.5 * self.C * avg(
                     self.problem.S**2 / R
                 ) * jump(self.Q)
         else:
-            flux = dot(avg(self.Fu), n("+")) + 0.5 * C * jump(self.Q)
+            self.flux = dot(avg(self.Fu), n("+")) + 0.5 * self.C * jump(self.Q)
 
-        self.F += inner(flux, jump(self.p)) * dS
+        self.F += inner(self.flux, jump(self.p)) * dS
 
         #if we want to keep track of tangent model do not add this
         #will this screw up, idk if just pointer or deep copy
         #lets see
         if (self.make_tangent):
-            self.F_no_dt += inner(flux, jump(self.p)) * dS
+            self.F_no_dt += inner(self.flux, jump(self.p)) * dS
 
     def add_bcs_to_weak_form(self):
         """Add boundary integrals to the variational form.
@@ -1030,7 +1032,8 @@ class DGImplicit(CGImplicit):
                             condition.marker
                             )
                     if condition.type == "Wall":
-                        # self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) + dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
+                        self.F += dot(dot(self.Fu_wall, n), self.p)*ds_exterior(condition.marker) #+ dot(0.5*C_wall*jump_Q_wall, self.p)*ds_exterior(condition.marker)
+                        '''
                         self.F += dot(
                             0.5 * dot(self.Fu, n) + 0.5 * dot(Fu_wall_ext, n), self.p
                         ) * ds_exterior(condition.marker) + dot(
@@ -1042,6 +1045,7 @@ class DGImplicit(CGImplicit):
                         ) * ds_exterior(condition.marker) + dot(
                             0.5 * C_wall * jump_Q_wall, self.p
                         ) * ds_exterior(condition.marker)
+                        '''
                     if condition.type == "Flux":
                         self.F += dot(dot(self.Fu_flux, n), self.p) * ds_exterior(
                             condition.marker
@@ -1720,6 +1724,87 @@ class DGCGImplicit(DGImplicit):
     def init_weak_form(self):
         # add entire SUPG weak form
         super().init_weak_form()
+
+
+
+class Linearized_DG(DGImplicit):
+    '''
+    Implementation of linearizing PDE
+    first using Frechet derivative
+    Allowing for separate schemes
+    between LHS and RHS
+    '''
+    def add_bilinear_bcs_to_weak_form(self):
+        """Add boundary integrals to the variational form.
+
+        This method may need to be overridden when implementing a solver with trace variables or an alternate approach to boundary conditions.
+        """
+        boundary_conditions = self.problem.boundary_conditions
+        ds_exterior = self.problem.ds
+        n = FacetNormal(self.domain)
+        # add boundary terms to bilinear form, no LF based terms
+        if self.p_type == "DG":
+            if self.swe_type == "full":
+                if self.verbose:
+                    self.log("Adding linear DG boundary conditions weakly")
+                for condition in boundary_conditions:
+                    if condition.type == "Open":
+                        # Fix to this so we can analyze the BCs later
+                        self.bilinear_form += dot(dot(self.Fu_open_linear, n), self.p) * ds_exterior(
+                            condition.marker
+                        )
+                    if condition.type == "Wall":
+                        self.bilinear_form += dot(dot(self.Fu_wall_linear, n), self.p)*ds_exterior(condition.marker)
+                    if condition.type == "Flux":
+                        self.bilinear_form += dot(dot(self.Fu_flux_linear, n), self.p) * ds_exterior(
+                            condition.marker
+                        )
+                    if condition.type == "OF":
+                        self.bilinear_form += dot(dot(self.Fu_linear, n), self.p)*ds_exterior(condition.marker)
+            elif self.swe_type == "linear":
+                NotImplementedError("Cant run linear SWE for linearized DG scheme")
+
+    def init_weak_form(self):
+        super().init_weak_form()
+        # need separate LHS and RHS
+        # linearizing by hand
+        # u_tilde is the increment function
+        self.u_tilde = TrialFunction(self.V)
+        self.Q_linear = derivative(self.Q, self.u, self.u_tilde)
+        self.R_linear = derivative(self.dQdt + self.S, self.u, self.u_tilde)
+        self.Fu_linear = derivative(self.Fu, self.u, self.u_tilde)
+        self.Fu_wall_linear = derivative(self.Fu_wall, self.u, self.u_tilde)
+        self.Fu_open_linear = derivative(self.Fu_open, self.u, self.u_tilde)
+        if self.problem.boundary_flux_func != None:
+            self.Fu_flux_linear = derivative(self.Fu_flux, self.u, self.u_tilde)
+        else:
+            self.Fu_flux_linear = None
+        
+        # do linear version of scheme
+        self.bilinear_form = inner(self.R_linear, self.p)*dx
+        self.bilinear_form -= inner(self.Fu_linear,grad(self.p))*dx
+        # linearization of DG flux by hand
+        n = FacetNormal(self.domain)
+        self.bilinear_form += inner(dot(avg(self.Fu_linear), n('+')) , jump(self.p))*dS
+        self.bilinear_form += inner(0.5*self.C*jump(self.Q_linear), jump(self.p))*dS
+        # need to add bcs to weak form
+        self.add_bilinear_bcs_to_weak_form()
+
+        #self.bilinear_form = derivative(self.F,self.u,self.u_tilde)
+    def solve_init(
+        self,
+        # u_init = lambda x: np.ones(x.shape),
+        solver_parameters={},
+    ):
+        """
+        Initialize the Newton solver
+        The newton solver is slightly different because
+        linearization was done first
+        """
+
+        # utilize the custom Newton solver class instead of the fe.petsc Nonlinear class
+        Newton_obj = CustomNewtonProblem2(self, solver_parameters=solver_parameters)
+        return Newton_obj
 
 
 _get_solver = {

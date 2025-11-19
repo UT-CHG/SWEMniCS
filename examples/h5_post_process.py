@@ -20,7 +20,7 @@ bathy_data = read_into_np_array(file_base, 'bathy')
 u_data = read_into_np_array(file_base, 'u')
 v_data = read_into_np_array(file_base, 'v')
 nt,ny,nx = h_data.shape
-
+print(f"Data dimensions: nt={nt}, ny={ny}, nx={nx}")
 
 #plot to make sure this is correct
 cm_to_m = .01
@@ -60,8 +60,8 @@ levels_v = np.linspace(v_data_min,v_data_max,nlevels)
 #time index: note t = index*dt where dt = .02
 dt = 0.1/5.0
 t_ind = nt-1
-img = plt.contourf(X,Y,h_data[t_ind],levels=levels_h,cmap='coolwarm')
-#img = plt.contourf(X,Y,u_data[t_ind],levels=levels_u,cmap='coolwarm')
+#img = plt.contourf(X,Y,h_data[t_ind],levels=levels_h,cmap='coolwarm')
+img = plt.contourf(X,Y,u_data[t_ind],levels=levels_u,cmap='coolwarm')
 #img = plt.contourf(X,Y,v_data[t_ind],levels=levels_v,cmap='coolwarm')
 plt.axis('scaled')
 plt.colorbar(img)

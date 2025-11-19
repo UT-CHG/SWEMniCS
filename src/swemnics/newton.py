@@ -207,6 +207,71 @@ class CustomNewtonProblem:
         self.A_tangent.assemble()
         return self.A_tangent
 
+class CustomNewtonProblem2(CustomNewtonProblem):
+    def __init__(self, obj1,solver_parameters={}):
+        """initialize the problem
+        
+        F -- Ufl form
+        """
+        # solution
+        self.u = obj1.u
+        # linearized variable
+        self.u_tilde = obj1.u_tilde
+        # nonlinear residual 
+        self.F = obj1.F
+        self.residual = fe.form(self.F)
+        self.verbose = obj1.verbose
+        # jascobian is bilinear form
+        self.J = obj1.bilinear_form
+        self.jacobian = fe.form(self.J)
+        self.bcs = obj1.problem.dirichlet_bcs
+        self.comm = obj1.problem.mesh.comm
+
+        #relative tolerance for Newton solver
+        self.rtol = 1e-5
+        #absolute tolerance for Newton solver
+        self.atol = 1e-6
+        #max iteration number for Newton solver
+        self.max_it = 5
+        #relaxation parameter for Newton solver
+        self.relaxation_parameter = 1.00
+        #underlying linear solver
+        #default for serial is lu, default for mulitprocessor is gmres
+        if self.comm.Get_size() == 1:
+            print("serial run")
+            self.ksp_type = "gmres"#preonly
+            self.pc_type = "ilu"#lu
+        else:
+            self.ksp_type = "gmres"
+            self.pc_type = "bjacobi"
+
+        for k, v in solver_parameters.items():
+            setattr(self, k, v)
+
+        self.A = petsc.create_matrix(self.jacobian)
+        self.L = petsc.create_vector(self.residual)
+        self.solver = PETSc.KSP().create(self.comm)
+
+        self.solver.setTolerances(rtol=solver_parameters.get("ksp_rtol",1e-8), atol=solver_parameters.get("ksp_atol", 1e-9), max_it=solver_parameters.get("ksp_max_it", 1000))
+        self.solver.setOperators(self.A)
+        self.solver.setErrorIfNotConverged(solver_parameters.get("ksp_ErrorIfNotConverged",True))
+        
+        if self.pc_type == 'element_block':
+            self.pc = ElementBlockPreconditioner(self.A, obj1.problem.mesh)
+        else:
+            self.pc = self.solver.getPC()
+            self.pc.setType(self.pc_type)
+
+        #for tangent linear model work
+        self.make_tangent = obj1.make_tangent
+        if (self.make_tangent):
+            self.F_no_dt = obj1.F_no_dt
+            #self.tangent_form = fe.form(self.F_no_dt)
+            self.tangent_J = ufl.derivative(self.F_no_dt, self.u)
+            self.tangent_jacobian = fe.form(self.tangent_J)
+            self.A_tangent = petsc.create_matrix(self.tangent_jacobian)
+
+
 
 class ElementBlockPreconditioner:
 

@@ -43,11 +43,10 @@ nan_mask = np.isnan(h_data[0])
 # write out x and y coords
 # and mask of where nans are
 np.save("x_coords.npy", X)
-np.save("y_coors.npy", Y)
+np.save("y_coords.npy", Y)
 np.save("mesh_hole.npy",nan_mask)
 
 print(X.shape)
 print(h_data[0].shape)
 
 
-print(np.load("mesh_hole.npy"))
