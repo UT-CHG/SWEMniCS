@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from mpi4py import MPI
 import timeit
 import h5py
-
+import sys
 '''
 Based on case from paper:
 Towards transient experimental water surfaces: A new benchmark dataset
@@ -20,7 +20,9 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
 #paramterize by input
-h5_file_path = 'my_data'
+# sample number
+sample_no = int(sys.argv[1])
+h5_file_path = 'my_data'+f'_{sample_no}'
 
 dt = 0.1/5.0#0.1
 t = 0

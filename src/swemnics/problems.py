@@ -1497,12 +1497,14 @@ class FlumeExperiment(TidalProblem):
     dramp: float = 0.15
     alpha: float = 2.0*np.pi/(60*60.)
     h_b_right_val: float = .0404*2.7478
+    sample_no: int = 0
+    mat_file_path: str = "/Users/markloveland/SWEMniCS/examples/data/Flume/random_field_A.mat"
     # take m3/s and convert to m2/s by dividing by width of inflow
     # exp 1: inflow = 5.05 m3/h
     # exp 2: inflow = 9.01 m3/h
     # exp 3: inflow = 12.01 m3/h
-    # channel width = .24 m 
-    boundary_flux: float = 12.01/(60*60*.24)
+    # channel width = .24 m original, .88 extended
+    boundary_flux: float = 12.01/(60*60*.88)
     """ Test case based on paper: 
     Towards transient experimental water surfaces: A new benchmark dataset
     for 2D shallow water solvers"""
@@ -1595,7 +1597,25 @@ class FlumeExperiment(TidalProblem):
         self._boundary_conditions = boundary_conditions
         self._dirichlet_bcs = []  # [bc._bc for bc in self.boundary_conditions if bc.type == "Open"]
         self.boundary_flux_func = fe.Function(self.V.sub(0).collapse()[0])
-        self.boundary_flux_func.interpolate(lambda x: -self.boundary_flux/((self.y0+self.y1/2.0)**2)*(x[1] - self.y0)*(x[1] - self.y1))
+        # pull data for this
+        f_interp = self.pull_flux_data()
+        #self.boundary_flux_func.interpolate(lambda x: -self.boundary_flux/((self.y0+self.y1/2.0)**2)*(x[1] - self.y0)*(x[1] - self.y1))
+        self.boundary_flux_func.interpolate(lambda x: f_interp(x[1]))
+    def pull_flux_data(self):
+        mat_data = scipy.io.loadmat(self.mat_file_path)
+        variable_name = "A_random"
+        data = mat_data[variable_name].T
+        data_sample = np.maximum(data[self.sample_no],0.0)
+        data_coords = mat_data["x_data"][:,0]
+        nsample,npoints = data.shape
+        # scale to fit y axis, it comes from 0-1
+        data_coords = data_coords*(self.y1-self.y0)
+        not_data = -self.boundary_flux/((self.y0+self.y1/2.0)**2)*(data_coords - self.y0)*(data_coords - self.y1)
+        #print(not_data.tolist())
+        #print(data_sample.tolist())
+        #exit(0)
+        f_cubic= scipy.interpolate.CubicSpline(data_coords[:],data_sample,bc_type='natural')
+        return f_cubic
 
     def create_bathymetry(self, V):
         h_b = fe.Function(V.sub(0).collapse()[0])
