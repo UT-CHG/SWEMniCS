@@ -1499,6 +1499,7 @@ class FlumeExperiment(TidalProblem):
     h_b_right_val: float = .0404*2.7478
     sample_no: int = 0
     mat_file_path: str = "/Users/markloveland/SWEMniCS/examples/data/Flume/random_field_A.mat"
+    comm: comm = MPI_COMM_WORLD
     # take m3/s and convert to m2/s by dividing by width of inflow
     # exp 1: inflow = 5.05 m3/h
     # exp 2: inflow = 9.01 m3/h

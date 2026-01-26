@@ -62,7 +62,8 @@ prob = FlumeExperiment(dt=dt,nt=nt,friction_law=fric_law,
 						  solution_var=sol_var,wd_alpha=0.001,wd=True,
 						  TAU=mannings_n, boundary_flux=inflow_rate, h_b_val=boundary_depth,
 						  xdmf_file="data/Flume/mesh.xdmf",
-						  xdmf_facet_file="data/Flume/facet_mesh.xdmf")
+						  xdmf_facet_file="data/Flume/facet_mesh.xdmf",
+						  comm=MPI_COMM_SELF)
 p_degree = [1,1]
 rel_toleran=1e-5
 abs_toleran=1e-6
