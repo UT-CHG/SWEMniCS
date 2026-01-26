@@ -16,7 +16,7 @@ start = timeit.default_timer()
 
 
 
-comm = MPI.COMM_WORLD
+comm = MPI.COMM_SELF
 rank = comm.Get_rank()
 
 #paramterize by input
@@ -62,8 +62,7 @@ prob = FlumeExperiment(dt=dt,nt=nt,friction_law=fric_law,
 						  solution_var=sol_var,wd_alpha=0.001,wd=True,
 						  TAU=mannings_n, boundary_flux=inflow_rate, h_b_val=boundary_depth,
 						  xdmf_file="data/Flume/mesh.xdmf",
-						  xdmf_facet_file="data/Flume/facet_mesh.xdmf",
-						  comm=MPI_COMM_SELF)
+						  xdmf_facet_file="data/Flume/facet_mesh.xdmf")
 p_degree = [1,1]
 rel_toleran=1e-5
 abs_toleran=1e-6
@@ -105,6 +104,7 @@ solver.time_loop(solver_parameters=params,stations=stations,plot_every=10,plot_n
 #prob.plot_solution(solver.u.sub(0),'Single_time_step')
 #print(solver.station_data.shape)
 if rank ==0:
+	'''
 	#note that station data is array with shape nt x nstattion x 3 (h,u,v)
 	plt.plot(np.linspace(0,t_f/(60*60*24),nt+1), solver.vals[:nt+1,-1,0], "k", linewidth=2, label="h at 800 m")
 	#plt.plot(points_on_proc[:, 1], p_values, "b--", linewidth = 2, label="Load")
@@ -125,6 +125,7 @@ if rank ==0:
 	#save to each solution to h5
 	print(solver.vals.shape)
 	print(stations.shape)
+	'''
 	with h5py.File(h5_file_path+"_h.h5", 'w') as f:
     	# Create a dataset named 'my_array_dataset' and store data_array in it
 		# there are gaps in the data
