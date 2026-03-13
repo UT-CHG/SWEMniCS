@@ -922,7 +922,7 @@ class TidalProblem(BaseProblem):
                 h_bc = self.u_bc.sub(0)
                 h_bc.interpolate(
                     fe.Expression(
-                        self.h_b, self.V.sub(0).element.interpolation_points()
+                        self.h_b, self.V.sub(0).element.interpolation_points
                     )
                 )
                 self._hb_boundary = None
@@ -1227,7 +1227,7 @@ class DamProblem(TidalProblem):
                             fe.Constant(self.mesh, ScalarType(0)),
                         ]
                     ),
-                    self.V.sub(1).element.interpolation_points(),
+                    self.V.sub(1).element.interpolation_points,
                 )
             )
 
