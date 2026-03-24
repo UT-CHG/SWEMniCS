@@ -1,23 +1,23 @@
 import meshio
 import gmsh
 import pygmsh
-
-resolution = 0.01
+conversion_factor = 4000.0/6.0078
+resolution = 0.01*conversion_factor
 # Channel parameters
 #length of flume
 cm_to_m = .01
 # width of rectangle
-r_width = 16.3*cm_to_m
+r_width = 16.3*cm_to_m*conversion_factor
 #height of rectangle object
-r_height = 8.0*cm_to_m
+r_height = 8.0*cm_to_m*conversion_factor
 #length of flume
-L = 6.0078
+L = 6.0078*conversion_factor
 #original expirement value
 #H = 24.0*cm_to_m
 #extended domain
 H = r_height*11.0
 # center of rectangle
-c = [213.5*cm_to_m, H/2.0, 0]
+c = [213.5*cm_to_m*conversion_factor, H/2.0, 0]
 
 #use to generate polygon points
 polygon_points = [[c[0] - r_width/2.0, c[1] - r_height/2.0, 0.0 ],
@@ -62,7 +62,7 @@ model.add_physical([channel_lines[1], channel_lines[3]], "Walls")
 model.add_physical(poly.curve_loop.curves, "Obstacle")
 
 geometry.generate_mesh(dim=2)
-gmsh.write("Flume/mesh.msh")
+gmsh.write("Flume/mesh2.msh")
 
 #can view in gui
 #gmsh.fltk.run()
@@ -72,7 +72,7 @@ gmsh.clear()
 geometry.__exit__()
 
 #now convert to h5
-mesh_from_file = meshio.read("Flume/mesh.msh")
+mesh_from_file = meshio.read("Flume/mesh2.msh")
 def create_mesh(mesh, cell_type, prune_z=False):
     cells = mesh.get_cells_type(cell_type)
     cell_data = mesh.get_cell_data("gmsh:physical", cell_type)
@@ -82,8 +82,8 @@ def create_mesh(mesh, cell_type, prune_z=False):
     )
     return out_mesh
 line_mesh = create_mesh(mesh_from_file, "line", prune_z=True)
-meshio.write("Flume/facet_mesh.xdmf", line_mesh)
+meshio.write("Flume/facet_mesh2.xdmf", line_mesh)
 
 triangle_mesh = create_mesh(mesh_from_file, "triangle", prune_z=True)
-meshio.write("Flume/mesh.xdmf", triangle_mesh)
+meshio.write("Flume/mesh2.xdmf", triangle_mesh)
 

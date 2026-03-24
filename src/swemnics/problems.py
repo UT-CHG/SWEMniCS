@@ -1602,6 +1602,7 @@ class FlumeExperiment(TidalProblem):
         #self.boundary_flux_func.interpolate(lambda x: -self.boundary_flux/((self.y0+self.y1/2.0)**2)*(x[1] - self.y0)*(x[1] - self.y1))
         self.boundary_flux_func.interpolate(lambda x: f_interp(x[1]))
     def pull_flux_data(self):
+        print(f"Pulling flux boundary sample {self.sample_no} from data file {self.mat_file_path}")
         mat_data = scipy.io.loadmat(self.mat_file_path)
         variable_name = "A_random"
         data = mat_data[variable_name].T
@@ -1654,3 +1655,103 @@ class FlumeExperiment(TidalProblem):
         else:
             self.u_bc.sub(0).x.array[self.dof_open] = tide
     '''
+@dataclass
+class Flume_2(FlumeExperiment):
+    xdmf_file: str = None
+    xdmf_facet_file: str = None
+    h_b_val: float = 10.0
+    x0: float = 0.0
+    x1: float = 4000.0
+    y0: float = 0.0
+    #original value
+    #y1: float = 0.24
+    #extended domain
+    y1: float = .08*11.0*4000.0/6.0078
+    sample_no: int = 0
+    mat_file_path: str = "/Users/markloveland/SWEMniCS/examples/data/Flume/random_field_A.mat"
+    # take m3/s and convert to m2/s by dividing by width of inflow
+    # exp 1: inflow = 5.05 m3/h
+    # exp 2: inflow = 9.01 m3/h
+    # exp 3: inflow = 12.01 m3/h
+    # channel width = .24 m original, .88 extended
+    boundary_flux: float = 12.01/(60*60*.88)
+    def init_bcs(self):
+        """Initialize the boundary conditions"""
+
+        facet_markers, facet_tag = MarkBoundary(self.mesh, self.boundaries)
+        self.facet_tag = facet_tag
+        # generate a measure with the marked boundaries
+        # save as an attribute to the class
+        self.ds = Measure("ds", domain=self.mesh, subdomain_data=facet_tag)
+        # Define the boundary conditions and pass them to the solver
+        boundary_conditions = []
+        V_boundary = self.u_bc.function_space
+        self.dof_open = np.array([], dtype=int)
+        self.ux_dofs_closed = np.array([])
+        self.uy_dofs_closed = np.array([])
+        for marker, func in self.boundaries:
+            if marker == 1:
+                bc = BoundaryCondition(
+                    "Open",
+                    marker,
+                    self.u_bc.sub(0),
+                    V_boundary.sub(0),
+                    bound_func=func,
+                    facet_tag=facet_tag,
+                )
+                self.dof_open = bc.dofs
+            elif marker == 2 or marker == 4:
+                bc = BoundaryCondition(
+                    "Wall",
+                    marker,
+                    self.u_bc.sub(1),
+                    V_boundary.sub(1),
+                    bound_func=func,
+                    facet_tag=facet_tag,
+                )
+            elif marker == 3:
+                bc = BoundaryCondition(
+                    "Flux",
+                    marker,
+                    self.u_bc.sub(1),
+                    V_boundary.sub(1),
+                    bound_func=func,
+                    facet_tag=facet_tag,
+                )
+
+            boundary_conditions.append(bc)
+
+        self._boundary_conditions = boundary_conditions
+        self._dirichlet_bcs = []  # [bc._bc for bc in self.boundary_conditions if bc.type == "Open"]
+        self.boundary_flux_func = fe.Function(self.V.sub(0).collapse()[0])
+        # pull data for this
+        f_interp = self.pull_flux_data()
+        #self.boundary_flux_func.interpolate(lambda x: -self.boundary_flux/((self.y0+self.y1/2.0)**2)*(x[1] - self.y0)*(x[1] - self.y1))
+        self.boundary_flux_func.interpolate(lambda x: f_interp(x[1]))
+    def create_bathymetry(self, V):
+        h_b = fe.Function(V.sub(0).collapse()[0])
+        h_b.interpolate(
+            lambda x: (.0005 * (x[0]))
+        )
+        return h_b
+    def evaluate_tidal_boundary(self, t):
+        # no tide signal
+        return (
+            self.h_b_val - 0.0005*self.x1
+        )
+    def pull_flux_data(self):
+        print(f"Pulling flux boundary sample {self.sample_no} from data file {self.mat_file_path}")
+        mat_data = scipy.io.loadmat(self.mat_file_path)
+        variable_name = "A_random"
+        data = mat_data[variable_name].T
+        data_sample = np.maximum(data[self.sample_no],0.0)*3.2/.004
+        data_coords = mat_data["x_data"][:,0]
+        nsample,npoints = data.shape
+        # scale to fit y axis, it comes from 0-1
+        data_coords = data_coords*(self.y1-self.y0)
+        not_data = -self.boundary_flux/((self.y0+self.y1/2.0)**2)*(data_coords - self.y0)*(data_coords - self.y1)
+        #print(not_data.tolist())
+        #print(data_sample.tolist())
+        #exit(0)
+        f_cubic= scipy.interpolate.CubicSpline(data_coords[:],data_sample,bc_type='natural')
+        return f_cubic
