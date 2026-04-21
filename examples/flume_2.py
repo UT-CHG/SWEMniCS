@@ -54,16 +54,25 @@ H = r_height*11.0
 #try a random number
 # Set a fixed seed for reproducibility (e.g., 42, any integer works)
 random.seed(0)
-max_boundary_depth = 1.0
+max_boundary_depth = 0.5
 min_boundary_depth = 4.5
 # take the number based on input number
 for a in range(sample_no+1):
 	random_float = random.uniform(max_boundary_depth, min_boundary_depth)
 # Generate a uniform random float between 1.0 and 10.0
 boundary_depth = random_float
-print(f"Starting random depth at {boundary_depth}\n")
+print(f"Starting random depth at right: {boundary_depth}\n")
 
-
+#do another random number for left boundary
+random.seed(1)
+max_boundary_depth_L = 0.5
+min_boundary_depth_L = 2.5
+# take the number based on input number
+for a in range(sample_no+1):
+	random_float_L = random.uniform(max_boundary_depth_L, min_boundary_depth_L)
+# Generate a uniform random float between 1.0 and 10.0
+boundary_depth_L = random_float_L
+print(f"Starting random depth at left: {boundary_depth_L}\n")
 
 
 # take m3/s and convert to m2/s by dividing by width of inflow
@@ -78,7 +87,7 @@ print(f"Starting random depth at {boundary_depth}\n")
 
 prob = Flume_2(dt=dt,nt=nt,friction_law=fric_law,
 						  solution_var=sol_var,wd_alpha=1.5,wd=True,
-						  TAU=mannings_n, h_b_val=boundary_depth,
+						  TAU=mannings_n, h_b_val=boundary_depth, h_b_val_L=boundary_depth_L,
 						  xdmf_file="data/Flume/mesh2.xdmf",
 						  xdmf_facet_file="data/Flume/facet_mesh2.xdmf",
 						  sample_no=sample_no,

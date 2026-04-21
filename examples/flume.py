@@ -6,6 +6,7 @@ from mpi4py import MPI
 import timeit
 import h5py
 import sys
+import random
 '''
 Based on case from paper:
 Towards transient experimental water surfaces: A new benchmark dataset
@@ -47,7 +48,20 @@ H = r_height*11.0
 
 y_coord = 0.12
 #depth on left boundary
-boundary_depth = 28.0/100.0
+#default
+#boundary_depth = 28.0/100.0
+#try a random number
+# Set a fixed seed for reproducibility (e.g., 42, any integer works)
+random.seed(0)
+max_boundary_depth = 28.0/100.0
+min_boundary_depth = 7.0/100.0
+# take the number based on input number
+for a in range(sample_no+1):
+	random_float = random.uniform(max_boundary_depth, min_boundary_depth)
+# Generate a uniform random float between 1.0 and 10.0
+boundary_depth = random_float
+print(f"Starting random depth at {boundary_depth}\n")
+
 # take m3/s and convert to m2/s by dividing by width of inflow
 # channel width = .24 m 
 # exp 1: inflow = 5.05 m3/h
@@ -62,7 +76,9 @@ prob = FlumeExperiment(dt=dt,nt=nt,friction_law=fric_law,
 						  solution_var=sol_var,wd_alpha=0.001,wd=True,
 						  TAU=mannings_n, boundary_flux=inflow_rate, h_b_val=boundary_depth,
 						  xdmf_file="data/Flume/mesh.xdmf",
-						  xdmf_facet_file="data/Flume/facet_mesh.xdmf")
+						  xdmf_facet_file="data/Flume/facet_mesh.xdmf",
+						  sample_no=sample_no,
+						  mat_file_path="/Users/markloveland/SWEMniCS/examples/data/Flume/random_field_A_2.mat")
 p_degree = [1,1]
 rel_toleran=1e-5
 abs_toleran=1e-6

@@ -1660,6 +1660,8 @@ class Flume_2(FlumeExperiment):
     xdmf_file: str = None
     xdmf_facet_file: str = None
     h_b_val: float = 10.0
+    h_b_val_L: float = 10.0
+    h_init_slope: float = 0.0005
     x0: float = 0.0
     x1: float = 4000.0
     y0: float = 0.0
@@ -1731,9 +1733,15 @@ class Flume_2(FlumeExperiment):
     def create_bathymetry(self, V):
         h_b = fe.Function(V.sub(0).collapse()[0])
         h_b.interpolate(
-            lambda x: (.0005 * (x[0]))
+            lambda x: (0.0005 * (x[0]))
         )
         return h_b
+    def make_h_init(self, V):
+        self.h_init_slope = (self.h_b_val - self.h_b_val_L)/(self.x1 - self.x0)
+        self.h_init = fe.Function(V)
+        #want uniform depth to start on this one
+        #self.h_init.interpolate(self.h_b)
+        self.h_init.interpolate(lambda x: self.h_b_val_L + (self.h_init_slope)*x[0])
     def evaluate_tidal_boundary(self, t):
         # no tide signal
         return (
