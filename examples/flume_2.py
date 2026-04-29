@@ -25,7 +25,7 @@ rank = comm.Get_rank()
 sample_no = int(sys.argv[1])
 h5_file_path = 'my_data'+f'_{sample_no}'
 
-dt = 10.0
+dt = 1.0
 t = 0
 t_f = dt*1500#10.0
 nt = int(np.ceil(t_f/dt))
@@ -55,7 +55,7 @@ H = r_height*11.0
 # Set a fixed seed for reproducibility (e.g., 42, any integer works)
 random.seed(0)
 max_boundary_depth = 0.5
-min_boundary_depth = 4.5
+min_boundary_depth = 3.0
 # take the number based on input number
 for a in range(sample_no+1):
 	random_float = random.uniform(max_boundary_depth, min_boundary_depth)
@@ -86,7 +86,7 @@ print(f"Starting random depth at left: {boundary_depth_L}\n")
 
 
 prob = Flume_2(dt=dt,nt=nt,friction_law=fric_law,
-						  solution_var=sol_var,wd_alpha=1.5,wd=True,
+						  solution_var=sol_var,wd_alpha=0.5,wd=True,
 						  TAU=mannings_n, h_b_val=boundary_depth, h_b_val_L=boundary_depth_L,
 						  xdmf_file="data/Flume/mesh2.xdmf",
 						  xdmf_facet_file="data/Flume/facet_mesh2.xdmf",
@@ -128,7 +128,7 @@ solver = Solvers.DGImplicit(prob,theta,p_degree=p_degree,make_tangent=False, get
 #solver = Solvers.DGImplicitNonConservative(prob,theta,p_degree=p_degree)
 params = {"rtol": rel_toleran, "atol": abs_toleran, "max_it":max_iter, "relaxation_parameter":relax_param, "ksp_type": "gmres", "pc_type": "bjacobi", "ksp_ErrorIfNotConverged": False}#,"pc_factor_mat_solver_type":"mumps"}
 name='Flume_2'
-solver.time_loop(solver_parameters=params,stations=stations,plot_every=1,plot_name=name)
+solver.time_loop(solver_parameters=params,stations=stations,plot_every=10,plot_name=name)
 
 #solver.solve()
 #prob.plot_solution(solver.u.sub(0),'Single_time_step')
@@ -185,7 +185,9 @@ if rank ==0:
 		temp_arr = temp_arr.reshape((npy,npx))
 		f.create_dataset('bathy', data=temp_arr)
 		#print(np.argwhere(np.isnan(temp_arr)))
-
+	l_boundary_flux = prob.pull_flux_data()
+	np.save(h5_file_path+'_left_boundary_flux.npy',l_boundary_flux(just_y))
+	np.save(h5_file_path+'_right_boundary_depth.npy',np.array([boundary_depth]))
 	#np.savetxt(f"{name}_p1_wse.csv", solver.vals[:,:,0], delimiter=",")
 	#np.savetxt(f"{name}_p1_xvel.csv", solver.vals[:,:,1], delimiter=",")
 	#np.savetxt(f"{name}_p1_yvel.csv", solver.vals[:,:,2], delimiter=",")
