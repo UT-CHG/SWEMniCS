@@ -45,6 +45,11 @@ class FrictionLaw(str, Enum):
         return self.value
 
 
+def interpolation_points(element):
+    points = element.interpolation_points
+    return points() if callable(points) else points
+
+
 @dataclass
 class BaseProblem(abc.ABC):
     """Steady-state problem on a unit box"""
@@ -922,7 +927,7 @@ class TidalProblem(BaseProblem):
                 h_bc = self.u_bc.sub(0)
                 h_bc.interpolate(
                     fe.Expression(
-                        self.h_b, self.V.sub(0).element.interpolation_points()
+                        self.h_b, interpolation_points(self.V.sub(0).element)
                     )
                 )
                 self._hb_boundary = None
@@ -1227,7 +1232,7 @@ class DamProblem(TidalProblem):
                             fe.Constant(self.mesh, ScalarType(0)),
                         ]
                     ),
-                    self.V.sub(1).element.interpolation_points(),
+                    interpolation_points(self.V.sub(1).element),
                 )
             )
 

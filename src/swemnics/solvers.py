@@ -55,6 +55,11 @@ from petsc4py.PETSc import ScalarType
 from typing import Literal
 
 
+def interpolation_points(element):
+    points = element.interpolation_points
+    return points() if callable(points) else points
+
+
 def create_element(mesh: mesh.Mesh, family: str, degree: int, shape: tuple[int] = ()):
     """Compatible element creation for UFL and Basix.
 
@@ -361,14 +366,14 @@ class CGImplicit(BaseSolver):
             if self.problem.h_init is None:
                 self.u_n.sub(0).interpolate(
                     fe.Expression(
-                        self.problem.h_b, self.V.sub(0).element.interpolation_points()
+                        self.problem.h_b, interpolation_points(self.V.sub(0).element)
                     )
                 )
             else:
                 self.u_n.sub(0).interpolate(
                     fe.Expression(
                         self.problem.h_init,
-                        self.V.sub(0).element.interpolation_points(),
+                        interpolation_points(self.V.sub(0).element),
                     )
                 )
             if self.problem.vel_init is None:
@@ -381,14 +386,14 @@ class CGImplicit(BaseSolver):
                                 fe.Constant(self.domain, ScalarType(0.0)),
                             ]
                         ),
-                        self.V.sub(1).element.interpolation_points(),
+                        interpolation_points(self.V.sub(1).element),
                     )
                 )
             else:
                 self.u_n.sub(1).interpolate(
                     fe.Expression(
                         self.problem.vel_init,
-                        self.V.sub(1).element.interpolation_points(),
+                        interpolation_points(self.V.sub(1).element),
                     )
                 )
 
@@ -397,7 +402,7 @@ class CGImplicit(BaseSolver):
                 self.u_n.sub(0).interpolate(
                     fe.Expression(
                         self.problem.h_init - self.problem.h_b,
-                        self.V.sub(0).element.interpolation_points(),
+                        interpolation_points(self.V.sub(0).element),
                     )
                 )
 
@@ -629,7 +634,7 @@ class CGImplicit(BaseSolver):
         bathy_func = fe.Function(self.V_scalar)
         bathy_func.interpolate(
             fe.Expression(
-                self.problem.h_b, self.V_scalar.element.interpolation_points()
+                self.problem.h_b, interpolation_points(self.V_scalar.element)
             )
         )
         self.station_bathy = bathy_func.eval(points_on_proc, self.cells)
@@ -703,13 +708,13 @@ class CGImplicit(BaseSolver):
         # simple but goes below original bathymetry
         self.eta_expr = fe.Expression(
             self.u.sub(0).collapse() - self.problem.h_b,
-            self.V_scalar.element.interpolation_points(),
+            interpolation_points(self.V_scalar.element),
         )
         self.eta_plot.interpolate(self.eta_expr)
 
         # rwerite for mixed elements
         self.v_expr = fe.Expression(
-            self.u.sub(1).collapse(), self.V_vel.element.interpolation_points()
+            self.u.sub(1).collapse(), interpolation_points(self.V_vel.element)
         )
         self.vel_plot.interpolate(self.v_expr)
         self.h_plot.interpolate(self.u.sub(0).collapse())
@@ -727,7 +732,7 @@ class CGImplicit(BaseSolver):
                 self.log("Interpolating bathymetry")
             self.bathy_plot.interpolate(
                 fe.Expression(
-                    self.problem.h_b, self.V_scalar.element.interpolation_points()
+                    self.problem.h_b, interpolation_points(self.V_scalar.element)
                 )
             )
             if self.verbose:

@@ -62,7 +62,10 @@ class CustomNewtonProblem:
             setattr(self, k, v)
 
         self.A = petsc.create_matrix(self.jacobian)
-        self.L = petsc.create_vector(self.residual)
+        try:
+            self.L = petsc.create_vector(self.residual)
+        except TypeError:
+            self.L = petsc.create_vector(petsc._extract_function_spaces(self.residual))
         self.solver = PETSc.KSP().create(self.comm)
 
         self.solver.setTolerances(rtol=solver_parameters.get("ksp_rtol",1e-8), atol=solver_parameters.get("ksp_atol", 1e-9), max_it=solver_parameters.get("ksp_max_it", 1000))
